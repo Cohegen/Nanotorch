@@ -1,0 +1,3 @@
+# Tensor Documentation
+
+The `tensor.py` file defines the `Tensor` class, which is a multi-dimensional array used for numerical computations. This class provides various methods for operations such as addition, subtraction, multiplication, and more. It also supports broadcasting, indexing, and slicing, making it essential for building and training machine learning models. The `Tensor` class is designed to be efficient and flexible, enabling high-performance computations on both CPUs and GPUs.
