@@ -42,7 +42,7 @@ def analyze_production_patterns():
     for trade_off, spectrum, decision in trade_offs:
         print(f"{trade_off:28} | {spectrum:20} | {decision}")
 
-    print("\n💡 Production Insights:")
+    print("\n Production Insights:")
     print("   - Large vocabularies (50k+ tokens) dominate memory in CrossEntropy")
     print("   - Batch computation is 10-100× more efficient than per-sample")
     print("   - Numerical stability becomes critical at scale (FP16 training)")

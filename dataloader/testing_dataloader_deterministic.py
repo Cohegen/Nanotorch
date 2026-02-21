@@ -1,8 +1,7 @@
 import os
 import sys
 
-# Ensure repo root is on sys.path so `dataloader` resolves to the package
-# (not the `dataloader/dataloader.py` module when running this file directly).
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np

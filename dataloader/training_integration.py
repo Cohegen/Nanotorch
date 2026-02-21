@@ -80,7 +80,7 @@ def test_training_integration():
     # Validate that all samples were seen
     assert epoch_samples == len(train_dataset), f"Expected {len(train_dataset)}, processed {epoch_samples}"
 
-    print("✅ Training integration works correctly!")
+    print(" Training integration works correctly!")
 
 if __name__ == "__main__":
     test_training_integration()

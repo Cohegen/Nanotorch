@@ -1,3 +1,5 @@
+##This code fails to run because our Tensor class in tensor.py
+## only takes one postional argument data and not requires_grad
 import time
 
 import numpy as np
