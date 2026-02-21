@@ -11,7 +11,7 @@ However a formal definition of spatial operations is that they are  image proces
 **Pooling**:Reduces spatial dimensions while preserving important features.
 
 ### Convolution in action
-![Alt text](convolution_kernel.png)
+![Alt text](assets/convolution_kernel.png)
 
 ```
 Input Image (5×5):        Kernel (3×3):        Output (3×3):
@@ -115,7 +115,7 @@ This is why kernel size matters enormously i.e a 7x7 kernel would require 5.4x m
 
 ### Conv2d(Detecting Patterns with sliding windows)
 Conv2D is a spatial operation that applies a filter(kernel) over a 2D input (image or feature map) to extract features like textures,edges and patterns.
-![Alt text](conv2d.png)
+![Alt text](assets/conv2d.png)
 Here the kernel slides across the image and computes weighted sums.
 
 ```
@@ -276,7 +276,7 @@ Step 1:     Step 2:     Step 3:     Step 4:
 Non-overlapping windows → Each input pixel used exactly once
 Stride=2 → Output dimensions halved in each direction
 ```
-![Alt text](sliding_window.gif)
+![Alt text](assets/sliding_window.gif)
 
 ## Batch Normalization
 Batch Normalization is one of the most important techniques for training deep networks.
@@ -432,3 +432,4 @@ Why pooling between layers:
 -Increases receptive field (each conv sees larger input area)
 -Provides translation invariance (cat moved 1 pixel still detected)
 ```
+
