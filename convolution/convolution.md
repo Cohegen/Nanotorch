@@ -115,7 +115,7 @@ This is why kernel size matters enormously i.e a 7x7 kernel would require 5.4x m
 
 ### Conv2d(Detecting Patterns with sliding windows)
 Conv2D is a spatial operation that applies a filter(kernel) over a 2D input (image or feature map) to extract features like textures,edges and patterns.
-![Alt text](assets/conv2d.png)
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/conv2d.png)
 Here the kernel slides across the image and computes weighted sums.
 
 ```
@@ -432,6 +432,7 @@ Why pooling between layers:
 -Increases receptive field (each conv sees larger input area)
 -Provides translation invariance (cat moved 1 pixel still detected)
 ```
+
 
 
 
