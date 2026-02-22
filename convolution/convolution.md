@@ -205,7 +205,7 @@ To maintain a stable variance across layers, weights are sampled from a distribu
 
 $$\sigma = \sqrt{\frac{2}{n_{\text{in}}}}$$
 
-Where the **fan-in** ($n_{\text{in}}$) is the number of incoming connections to a neuron. For a convolutional layer, this is calculated as:
+Where the **fan-in** $n_{in}$ is the number of incoming connections to a neuron. For a convolutional layer, this is calculated as:
 
 $$n_{\text{in}} = \text{input\_channels} \times \text{kernel\_height} \times \text{kernel\_width}$$
 
