@@ -11,7 +11,7 @@ However a formal definition of spatial operations is that they are  image proces
 **Pooling**:Reduces spatial dimensions while preserving important features.
 
 ### Convolution in action
-![Alt text](https://github.com/Cohegen/Nanotorch/assets/convolution_kernel.png)
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/convolution_kernel.png)
 
 ```
 Input Image (5×5):        Kernel (3×3):        Output (3×3):
@@ -432,5 +432,6 @@ Why pooling between layers:
 -Increases receptive field (each conv sees larger input area)
 -Provides translation invariance (cat moved 1 pixel still detected)
 ```
+
 
 
