@@ -263,6 +263,7 @@ Memory reduction: 4× less!         Computation reduction: 4× less!
 
 ### Sliding Window Pattern
 Both pooling operations follow the same sliding window pattern:
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/sliding_window.gif)
 
 ```
 Sliding 2×2 window with stride=2:
@@ -432,6 +433,7 @@ Why pooling between layers:
 -Increases receptive field (each conv sees larger input area)
 -Provides translation invariance (cat moved 1 pixel still detected)
 ```
+
 
 
 
