@@ -184,21 +184,33 @@ Dense(3072→1000) = 3M params       Conv2d(3→16, 3×3) = 448 params
 No spatial awareness               Preserves spatial relationships
 Massive parameter count            Parameter sharing across space
 ```
-### Weight Initialization: He Initialization for ReLU Networks
+# Weight Initialization: He (Kaiming) Initialization
 
-Our Conv2d uses **He initialization**, which is designed for ReLU activations:
+In our **Conv2d** layers, we use **He initialization** (also known as Kaiming initialization). This method is specifically optimized for deep neural networks using **ReLU** activation functions.
 
-- **Problem**: Wrong initialization leads to vanishing or exploding gradients.
-### Weight Initialization Formula
+---
 
-The standard deviation $\sigma$ for initialization is calculated as:
+## 1. The Core Problem
+Standard initialization methods often fail as networks get deeper:
+* **Vanishing Gradients:** If weights are too small, the signal diminishes to zero, and the model stops learning.
+* **Exploding Gradients:** If weights are too large, the signal grows exponentially, causing numerical instability.
+
+
+
+## 2. The Solution: He Initialization
+ReLU units "kill" roughly half of their input (anything below zero). To compensate for this loss of signal, He initialization increases the variance of the weights. 
+
+### The Mathematical Formula
+To maintain a stable variance across layers, weights are sampled from a distribution where the standard deviation $\sigma$ is:
 
 $$\sigma = \sqrt{\frac{2}{n_{\text{in}}}}$$
 
-Where the **fan-in** $n_{\text{in}}$ is defined as:
+Where the **fan-in** ($n_{\text{in}}$) is the number of incoming connections to a neuron. For a convolutional layer, this is calculated as:
 
-$$n_{\text{in}} = \text{channels} \times \text{kernel\_height} \times \text{kernel\_width}$$
-This works because it maintains variance through the ReLU nonlinearity.
+$$n_{\text{in}} = \text{input\_channels} \times \text{kernel\_height} \times \text{kernel\_width}$$
+
+---
+
 
 ### The 6-Loop Implementation Strategy
 
