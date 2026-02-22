@@ -392,6 +392,7 @@ current batch                      consistent inference
 
 A CNN processes images through alternating convolution and pooling layers, gradually extracting higher-level features:
 
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/hierarchy.png)
 ```
 Complete CNN Pipeline:
 
