@@ -202,7 +202,7 @@ Pooling operations compress spatial information while keeping the most important
 
 ### MaxPool2d
 Max pooling finds the strongest activation in each window, preserving sharp features like edges and corners.
-
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/maxpooling.png)
 ```
 MaxPool2d Example (2×2 kernel, stride=2):
 Input (4×4):              Windows:               Output (2×2):
@@ -221,7 +221,7 @@ Bottom-left: max(2,9,0,1) = 9  Bottom-right: max(1,7,3,6) = 7
 
 ### AvgPool2d(Smoothing Local Features)
 Average pooling computes the mean of each window,creating smoother and more general features.
-
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/avg_pooling.png)
 ```
 AvgPool2d Example (same 2×2 kernel, stride=2):
 Input (4×4):              Output (2×2):
@@ -433,6 +433,7 @@ Why pooling between layers:
 -Increases receptive field (each conv sees larger input area)
 -Provides translation invariance (cat moved 1 pixel still detected)
 ```
+
 
 
 
