@@ -330,9 +330,9 @@ BatchNorm ensures that each neuron receives well-scaled inputs, making gradient 
 Given a mini-batch of size \(m\):
 
 1. **Compute the batch mean for each neuron**:
-\[
+$\[
 \mu_B = \frac{1}{m}\sum_{i=1}^{m} x_i
-\]
+\]$
 
 2. **Compute the batch variance**:
 \[
