@@ -351,8 +351,8 @@ $\[
 y_i = \gamma \hat{x}_i + \beta
 \]$
 
-- \(\gamma\) → scales the normalized output  
-- \(\beta\) → shifts the normalized output  
+- $\(\gamma\)$ → scales the normalized output  
+- $\(\beta\)$ → shifts the normalized output  
 
 This allows the network to **restore the original distribution** if needed.
 
