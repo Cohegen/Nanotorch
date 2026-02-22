@@ -191,13 +191,13 @@ Our Conv2d uses **He initialization**, which is designed for ReLU activations:
 - **Problem**: Wrong initialization leads to vanishing or exploding gradients.
 - **Solution**: $\[
 \sigma = \sqrt{\frac{2}{n_{\text{in}}}}
-\]$
+\]
 
-where the **fan-in** $\(n_{\text{in}}\)$ is:
+where the **fan-in** \(n_{\text{in}}\) is:
 
-$\[
+\[
 n_{\text{in}} = \text{channels} \times \text{kernel\_height} \times \text{kernel\_width}
-\]$
+\]
 This works because it maintains variance through the ReLU nonlinearity.
 
 ### The 6-Loop Implementation Strategy
