@@ -70,13 +70,13 @@ This exponential growth causes:
 **The Solution**: Limit the maximum size of gradients before updating weights.
 
 **Clipping by Norm**: Scale the entire gradient vector if its magnitude exceeds a threshold.
-$\[
+$$\[
 \nabla L \leftarrow
 \begin{cases}
 \nabla L & \text{if } \lVert \nabla L \rVert \le \text{max\_norm} \\
 \nabla L \cdot \frac{\text{max\_norm}}{\lVert \nabla L \rVert} & \text{if } \lVert \nabla L \rVert > \text{max\_norm}
 \end{cases}
-\]$
+\]$$
 
 
 #### **Gradient Accumulation**
