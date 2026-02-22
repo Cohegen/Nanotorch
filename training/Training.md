@@ -38,7 +38,7 @@ Where:
 #### **Learning Rate Scheduling**
 
 Why do we need to apply learning rate scheduling? Recall the gradient descent update:
-$$\text{updated\_weight} = \text{old\_weight} - \eta \cdot \text{gradient\_of\_loss}$$
+updated_weight = old_weight - learning_rate x gradient_of_loss
 
 The learning rate ($\eta$) determines how big steps we take, how fast we learn, and whether we converge or diverge.
 
