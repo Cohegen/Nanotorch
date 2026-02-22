@@ -344,7 +344,7 @@ $\[
 \hat{x}_i = \frac{x_i - \mu_B}{\sqrt{\sigma_B^2 + \epsilon}}
 \]$
 
-> Here, \(x_i\) is the output of a single neuron for sample \(i\), and \(\epsilon\) is a small constant to avoid division by zero.
+> Here, $\(x_i\)$ is the output of a single neuron for sample $\(i\)$, and $\(\epsilon\)$ is a small constant to avoid division by zero.
 
 4. **Scale and shift (learnable parameters)**:
 $\[
