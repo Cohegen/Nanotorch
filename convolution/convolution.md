@@ -189,7 +189,7 @@ Massive parameter count            Parameter sharing across space
 Our Conv2d uses **He initialization**, which is designed for ReLU activations:
 
 - **Problem**: Wrong initialization leads to vanishing or exploding gradients.
-- **Solution**: $\[
+- **Solution**: \[
 \sigma = \sqrt{\frac{2}{n_{\text{in}}}}
 \]
 
