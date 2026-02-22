@@ -71,13 +71,11 @@ This exponential growth causes:
 
 **Clipping by Norm**: Scale the entire gradient vector if its magnitude exceeds a threshold.
 
-$\nabla L \leftarrow
-\begin{cases}
-\nabla L & \text{if } \lVert \nabla L \rVert \le \text{max\_norm} \\
-\nabla L \cdot \frac{\text{max\_norm}}{\lVert \nabla L \rVert} & \text{if } \lVert \nabla L \rVert > \text{max\_norm}
-\end{cases}
-\$
+If ||∇L|| ≤ max_norm:
+    ∇L = ∇L
 
+If ||∇L|| > max_norm:
+    ∇L = ∇L * (max_norm / ||∇L||)
 
 #### **Gradient Accumulation**
 
@@ -106,7 +104,9 @@ Let mini-batch losses be $l_1, l_2, \dots, l_n$ where $n = B_{eff} / B_{actual}$
 
 Dividing by $n$ keeps the learning rate consistent with the actual batch size. The formula for accumulated gradient is:
 
-$$\nabla L_{accumulated} = \frac{1}{\text{accumulation\_steps}} \sum_{i=1}^{n} \nabla L_{\text{batch\_i}}$$
+Accumulated Gradient:
+
+∇L_accumulated = (1 / accumulation_steps) × (∇L_batch_1 + ∇L_batch_2 + ... + ∇L_batch_n)
 
 ### 3.Train vs Eval Modes
 Many layer behave differently during training vs inference:
