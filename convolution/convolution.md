@@ -207,7 +207,7 @@ $$\sigma = \sqrt{\frac{2}{n_{\text{in}}}}$$
 
 Where the **fan-in** $n_{in}$ is the number of incoming connections to a neuron. For a convolutional layer, this is calculated as:
 
-$$n_{in} = \text{input\_channels} \times \text{kernel\_height} \times \text{kernel\_width}$$
+$n_{in} = \text{input\_channels} \times \text{kernel\_height} \times \text{kernel\_width}$
 
 ---
 
