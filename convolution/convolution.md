@@ -13,11 +13,9 @@ Formally, **spatial operations** are image-processing operations where each outp
 
 ### Convolution in Action
 
-<<<<<<< Updated upstream
-![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/convolution_kernel.png)
-=======
 
->>>>>>> Stashed changes
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/convolution_kernel.png)
+
 
 ```
 Input Image (5×5):        Kernel (3×3):        Output (3×3):
@@ -128,11 +126,8 @@ Kernel size matters enormously: a 7×7 kernel would require about 5.4× more com
 
 Conv2D is a spatial operation that applies a filter (kernel) over a 2D input (image or feature map) to extract features such as textures, edges, and patterns. The kernel slides across the image and computes weighted sums.
 
-<<<<<<< Updated upstream
+
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/convolution_kernel.png)
-=======
-![Alt text](conv2d.png)
->>>>>>> Stashed changes
 
 ```
 Convolution Visualization:
@@ -265,11 +260,9 @@ Pooling operations compress spatial information while keeping the most important
 ### MaxPool2d
 
 Max pooling selects the strongest activation in each window, preserving sharp features such as edges and corners.
-<<<<<<< Updated upstream
-![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/maxpooling.png)
-=======
 
->>>>>>> Stashed changes
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/maxpooling.png)
+
 ```
 MaxPool2d Example (2×2 kernel, stride=2):
 Input (4×4):              Windows:               Output (2×2):
@@ -289,9 +282,9 @@ Bottom-left: max(2,9,0,1) = 9  Bottom-right: max(1,7,3,6) = 7
 ### AvgPool2d: Smoothing Local Features
 
 Average pooling computes the mean of each window, creating smoother and more general features.
-<<<<<<< Updated upstream
+
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/avg_pooling.png)
-=======
+
 
 >>>>>>> Stashed changes
 ```
@@ -335,11 +328,11 @@ Feature Maps → Global Average Pool → Dense → Classification
 ### Sliding Window Pattern
 
 Both pooling operations follow the same sliding-window pattern:
-<<<<<<< Updated upstream
-![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/sliding_window.gif)
-=======
 
->>>>>>> Stashed changes
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/sliding_window.gif)
+
+
+
 ```
 Sliding 2×2 window with stride=2:
 Step 1:     Step 2:     Step 3:     Step 4:
@@ -479,10 +472,9 @@ current batch                      consistent inference
 
 A CNN processes images through alternating convolution and pooling layers, gradually extracting higher-level features:
 
-<<<<<<< Updated upstream
+
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/hierarchy.png)
-=======
->>>>>>> Stashed changes
+
 ```
 Complete CNN Pipeline:
 
