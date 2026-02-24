@@ -37,11 +37,10 @@ def testing_sgd():
 
     #set gradient AFTER creating optimizer 
     param2.grad = Tensor([0.1,0.2])
-    original_data_momentum = param2.data.copy()
 
-    #First step: v = [0.1,0.2], param = [1.0,2.0] - 0.1 * [0.1,0.2] = [0.99,1.98]
+    #First step: v = 0.9 * 0 + [0.1,0.2] = [0.1,0.2]
     optimizer_momentum.step()
-    expected_first = original_data_momentum - 0.1 * np.array([0.1,0.2])
+    expected_first = np.array([1.0,2.0]) - 0.1 * np.array([0.1,0.2])
     assert np.allclose(param2.data,expected_first)
 
     #second step with same gradient
@@ -49,7 +48,6 @@ def testing_sgd():
     optimizer_momentum.step()
 
     #v = 0.9* [0.1,0.2] + [0.1,0.2] = [0.19,0.38]
-    #param = [0.99,1.98] - 0.1 * [0.19,0.38] = [0.971, 1.942]
     expected_momentum = np.array([0.19,0.38])
     expected_second = expected_first - 0.1 * expected_momentum 
     assert np.allclose(param2.data,expected_second,rtol=1e-5)
@@ -59,11 +57,9 @@ def testing_sgd():
     optimizer_wd = SGD([param3],lr=0.1,weight_decay=0.01)
     #set gradient AFTER creating optimizer
     param3.grad = Tensor([0.1,0.2])
-    original_data_wd = param3.data.copy()
 
-    optimizer_wd.step()
     #grad_with_decay = [0.1,0.2] + 0.01 * [1.0,2.0] = [0.11,0.22]
-    expected_wd = original_data_wd - 0.1 * np.array([0.11,0.22])
+    expected_wd = np.array([1.0,2.0]) - 0.1 * np.array([0.11,0.22])
     assert np.allclose(param3.data,expected_wd)
 
 

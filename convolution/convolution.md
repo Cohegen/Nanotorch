@@ -13,7 +13,11 @@ Formally, **spatial operations** are image-processing operations where each outp
 
 ### Convolution in Action
 
+<<<<<<< Updated upstream
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/convolution_kernel.png)
+=======
+![Alt text](convolution_kernel.png)
+>>>>>>> Stashed changes
 
 ```
 Input Image (5×5):        Kernel (3×3):        Output (3×3):
@@ -124,7 +128,11 @@ Kernel size matters enormously: a 7×7 kernel would require about 5.4× more com
 
 Conv2D is a spatial operation that applies a filter (kernel) over a 2D input (image or feature map) to extract features such as textures, edges, and patterns. The kernel slides across the image and computes weighted sums.
 
+<<<<<<< Updated upstream
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/convolution_kernel.png)
+=======
+![Alt text](conv2d.png)
+>>>>>>> Stashed changes
 
 ```
 Convolution Visualization:
@@ -163,6 +171,7 @@ for batch in range(B):          # Loop 1: Process each sample
 
 Where:
 
+<<<<<<< Updated upstream
 - $\(B\)$ = batch size  
 - $\(C_{in}\)$ = input channels  
 - $\(C_{out}\)$ = output channels  
@@ -170,6 +179,15 @@ Where:
 - $\(K_h, K_w\)$ = kernel size  
 
 **Total operations:** $\(B \times C_{out} \times H_{out} \times W_{out} \times K_h \times K_w \times C_{in}\)$
+=======
+- \(B\) = batch size  
+- \(C_{in}\) = input channels  
+- \(C_{out}\) = output channels  
+- \(H_{out}, W_{out}\) = output spatial size  
+- \(K_h, K_w\) = kernel size  
+
+**Total operations:** \(B \times C_{out} \times H_{out} \times W_{out} \times K_h \times K_w \times C_{in}\)
+>>>>>>> Stashed changes
 
 For typical values (B=32, C_out=64, H_out=224, W_out=224, K_h=3, K_w=3, C_in=3): **2.8 billion operations** per forward pass.
 
@@ -184,6 +202,7 @@ Dense(3072→1000) = 3M params       Conv2d(3→16, 3×3) = 448 params
 No spatial awareness               Preserves spatial relationships
 Massive parameter count            Parameter sharing across space
 ```
+<<<<<<< Updated upstream
 # Weight Initialization: He (Kaiming) Initialization
 
 In our **Conv2d** layers, we use **He initialization** (also known as Kaiming initialization). This method is specifically optimized for deep neural networks using **ReLU** activation functions.
@@ -212,6 +231,16 @@ $n_{in}$ = channels x kernel_height x kernel_width
 
 ---
 
+=======
+### Weight Initialization: He Initialization for ReLU Networks
+
+Our Conv2d uses **He initialization**, which is designed for ReLU activations:
+
+- **Problem**: Wrong initialization leads to vanishing or exploding gradients.
+- **Solution**: \(\sigma = \sqrt{2 / n_{in}}\), where \(n_{in}\) = channels × kernel_height × kernel_width (fan-in).
+
+This works because it maintains variance through the ReLU nonlinearity.
+>>>>>>> Stashed changes
 
 ### The 6-Loop Implementation Strategy
 
@@ -236,7 +265,11 @@ Pooling operations compress spatial information while keeping the most important
 ### MaxPool2d
 
 Max pooling selects the strongest activation in each window, preserving sharp features such as edges and corners.
+<<<<<<< Updated upstream
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/maxpooling.png)
+=======
+
+>>>>>>> Stashed changes
 ```
 MaxPool2d Example (2×2 kernel, stride=2):
 Input (4×4):              Windows:               Output (2×2):
@@ -256,7 +289,11 @@ Bottom-left: max(2,9,0,1) = 9  Bottom-right: max(1,7,3,6) = 7
 ### AvgPool2d: Smoothing Local Features
 
 Average pooling computes the mean of each window, creating smoother and more general features.
+<<<<<<< Updated upstream
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/avg_pooling.png)
+=======
+
+>>>>>>> Stashed changes
 ```
 AvgPool2d Example (same 2×2 kernel, stride=2):
 Input (4×4):              Output (2×2):
@@ -298,7 +335,11 @@ Feature Maps → Global Average Pool → Dense → Classification
 ### Sliding Window Pattern
 
 Both pooling operations follow the same sliding-window pattern:
+<<<<<<< Updated upstream
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/sliding_window.gif)
+=======
+
+>>>>>>> Stashed changes
 ```
 Sliding 2×2 window with stride=2:
 Step 1:     Step 2:     Step 3:     Step 4:
@@ -350,6 +391,7 @@ BatchNorm ensures that each neuron receives well-scaled inputs, making gradient 
 Given a mini-batch of size \(m\):
 
 1. **Compute the batch mean for each neuron**:
+<<<<<<< Updated upstream
 $\[
 \mu_B = \frac{1}{m}\sum_{i=1}^{m} x_i
 \]$
@@ -373,6 +415,31 @@ y_i = \gamma \hat{x}_i + \beta
 
 - $\(\gamma\)$ → scales the normalized output  
 - $\(\beta\)$ → shifts the normalized output  
+=======
+\[
+\mu_B = \frac{1}{m}\sum_{i=1}^{m} x_i
+\]
+
+2. **Compute the batch variance**:
+\[
+\sigma_B^2 = \frac{1}{m}\sum_{i=1}^{m} (x_i - \mu_B)^2
+\]
+
+3. **Normalize the activations**:
+\[
+\hat{x}_i = \frac{x_i - \mu_B}{\sqrt{\sigma_B^2 + \epsilon}}
+\]
+
+> Here, \(x_i\) is the output of a single neuron for sample \(i\), and \(\epsilon\) is a small constant to avoid division by zero.
+
+4. **Scale and shift (learnable parameters)**:
+\[
+y_i = \gamma \hat{x}_i + \beta
+\]
+
+- \(\gamma\) → scales the normalized output  
+- \(\beta\) → shifts the normalized output  
+>>>>>>> Stashed changes
 
 This allows the network to **restore the original distribution** if needed.
 
@@ -412,7 +479,10 @@ current batch                      consistent inference
 
 A CNN processes images through alternating convolution and pooling layers, gradually extracting higher-level features:
 
+<<<<<<< Updated upstream
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/hierarchy.png)
+=======
+>>>>>>> Stashed changes
 ```
 Complete CNN Pipeline:
 
@@ -470,4 +540,8 @@ Why pooling between layers:
 - Reduces computation for the next layer.
 - Increases receptive field (each conv sees a larger input area).
 - Provides translation invariance (e.g. cat moved by 1 pixel is still detected).
+<<<<<<< Updated upstream
 ```
+=======
+```
+>>>>>>> Stashed changes
