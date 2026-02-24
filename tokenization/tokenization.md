@@ -226,5 +226,5 @@ i=2: tokens[2]='l' → no match, append 'l', advance 1
 
 ---
 
-
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/bpe_tokenization.png)
 # End of Module
