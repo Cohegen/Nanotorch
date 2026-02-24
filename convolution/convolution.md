@@ -527,4 +527,4 @@ Why pooling between layers:
 ```
 =======
 ```
->>>>>>> Stashed changes
+
