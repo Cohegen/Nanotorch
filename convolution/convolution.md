@@ -400,37 +400,37 @@ y_i = \gamma \hat{x}_i + \beta
 - $\(\gamma\)$ → scales the normalized output  
 - $\(\beta\)$ → shifts the normalized output  
 =======
-\[
+$\[
 \mu_B = \frac{1}{m}\sum_{i=1}^{m} x_i
-\]
+\]$
 
 2. **Compute the batch variance**:
-\[
+$\[
 \sigma_B^2 = \frac{1}{m}\sum_{i=1}^{m} (x_i - \mu_B)^2
-\]
+\]$
 
 3. **Normalize the activations**:
-\[
+$\[
 \hat{x}_i = \frac{x_i - \mu_B}{\sqrt{\sigma_B^2 + \epsilon}}
-\]
+\]$
 
 > Here, \(x_i\) is the output of a single neuron for sample \(i\), and \(\epsilon\) is a small constant to avoid division by zero.
 
 4. **Scale and shift (learnable parameters)**:
-\[
+$\[
 y_i = \gamma \hat{x}_i + \beta
-\]
+\]$
 
-- \(\gamma\) → scales the normalized output  
-- \(\beta\) → shifts the normalized output  
->>>>>>> Stashed changes
+- $\(\gamma\)$ → scales the normalized output  
+- $\(\beta\)$ → shifts the normalized output  
+
 
 This allows the network to **restore the original distribution** if needed.
 
 
 ### BatchNorm in Our Convolution Use Case
 
-For each channel \(c\), BatchNorm computes:
+For each channel $\(c\)$, BatchNorm computes:
 
 ```
 1. Batch Statistics (during training):
