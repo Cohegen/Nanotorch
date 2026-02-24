@@ -166,7 +166,7 @@ for batch in range(B):          # Loop 1: Process each sample
 
 Where:
 
-<<<<<<< Updated upstream
+
 - $\(B\)$ = batch size  
 - $\(C_{in}\)$ = input channels  
 - $\(C_{out}\)$ = output channels  
@@ -174,15 +174,7 @@ Where:
 - $\(K_h, K_w\)$ = kernel size  
 
 **Total operations:** $\(B \times C_{out} \times H_{out} \times W_{out} \times K_h \times K_w \times C_{in}\)$
-=======
-- \(B\) = batch size  
-- \(C_{in}\) = input channels  
-- \(C_{out}\) = output channels  
-- \(H_{out}, W_{out}\) = output spatial size  
-- \(K_h, K_w\) = kernel size  
 
-**Total operations:** \(B \times C_{out} \times H_{out} \times W_{out} \times K_h \times K_w \times C_{in}\)
->>>>>>> Stashed changes
 
 For typical values (B=32, C_out=64, H_out=224, W_out=224, K_h=3, K_w=3, C_in=3): **2.8 billion operations** per forward pass.
 
