@@ -218,16 +218,15 @@ $n_{in}$ = channels x kernel_height x kernel_width
 
 ---
 
-=======
+======
 ### Weight Initialization: He Initialization for ReLU Networks
 
 Our Conv2d uses **He initialization**, which is designed for ReLU activations:
 
 - **Problem**: Wrong initialization leads to vanishing or exploding gradients.
-- **Solution**: \(\sigma = \sqrt{2 / n_{in}}\), where \(n_{in}\) = channels × kernel_height × kernel_width (fan-in).
+- **Solution**: $\(\sigma = \sqrt{2 / n_{in}}\)$, where $\(n_{in}\)$ = channels × kernel_height × kernel_width (fan-in).
 
 This works because it maintains variance through the ReLU nonlinearity.
->>>>>>> Stashed changes
 
 ### The 6-Loop Implementation Strategy
 
