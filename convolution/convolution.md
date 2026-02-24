@@ -242,7 +242,7 @@ for batch:           ← Process each sample in parallel (in practice)
             for in_ch: ← Accumulate across input channels
               result += input[...] * weight[...]
 ```
-This reveals why convolution is expensive: \(\mathcal{O}(B \times C_{out} \times H \times W \times K_h \times K_w \times C_{in})\) operations.
+This reveals why convolution is expensive: $\(\mathcal{O}(B \times C_{out} \times H \times W \times K_h \times K_w \times C_{in})\)$ operations.
 
 ## Pooling Operations
 
