@@ -16,7 +16,7 @@ Formally, **spatial operations** are image-processing operations where each outp
 <<<<<<< Updated upstream
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/convolution_kernel.png)
 =======
-![Alt text](convolution_kernel.png)
+
 >>>>>>> Stashed changes
 
 ```
