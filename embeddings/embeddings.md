@@ -148,10 +148,11 @@ Position-Aware:      [vec_42+pos_0, vec_7+pos_1, vec_15+pos_2, vec_99+pos_3]
 
 ### Mathematical definition of Embedding Lookup
 - Suppose we have:
+  ```
    *1.Vocabulary size*:V
    *2.Embedding dimension*:d
    *3.Embedding matrix*: E (whose dimensions is V by d)
-
+   ```
 - Each row is a vecotr for one token.
 - If our input token index is: i.
 - Then the embedding lookup will be: embedding = E[i]
@@ -161,28 +162,34 @@ Position-Aware:      [vec_42+pos_0, vec_7+pos_1, vec_15+pos_2, vec_99+pos_3]
 - We know that lookup E[i] is mathematically equivalent to x_oneHot * E
 - Where, x_oneHot is a vector that has, 1 position at position i and 0 everywhere else
 - Example (V=3,token=2)
+    ``` 
       x = [0,0,1,0,0]
       xE = E[2]
+    ```
 
 ### Forward pass
 
 - Given that input token i = 3 and embedding matrix E.
 - Forward pass:
+  ```
      * h = E[i]
-
+  ```
 This vector h goes into the rest of the network.
 Loss,L = loss(h).
 
 ### Backpropagation.
 During backpropagation,we compute:
+     ```
      dL/dE i.e gradient of loss wrt embedding matrix E
+     ```
 
 However, only the row that was looked up gets a gradient.
 
 This is because h = E[i] does not depend on any other row of E.
-
+```
 So: dL/dE[j] = 0 for j != i
 And: dL/dE[i] = dL/dh
+```
 
 ### Concise Example
 Suppose our embedding E = [e0,e1,e2,e3,e4]
@@ -313,3 +320,4 @@ Step 3: Outer product → angles     Step 4: Interleave sin/cos
   = (max_len, embed_dim//2)          pe[:, 1::2] = cos(angles)
                                      = (max_len, embed_dim)
 ```
+
