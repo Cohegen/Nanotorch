@@ -192,7 +192,7 @@ And: dL/dE[i] = dL/dh
 ```
 
 ### Concise Example
-Suppose our embedding E = [e0,e1,e2,e3,e4]
+Suppose our embedding $E = [e0,e1,e2,e3,e4]$
 Input token =2 
 Forward: h = e2
 backpropagation gives : dL/dh = g
@@ -200,6 +200,7 @@ backpropagation gives : dL/dh = g
 This means the gradient update becomes:
 - Row2 gets gradient of g
 - All other rows get zero.
+```
 So the resultant gradient vector will look like this:
 dL/dE = [
     0
@@ -208,7 +209,7 @@ dL/dE = [
     0
     0
 ]
-
+```
 ### Learnable Positional Encoding
 - Trainable position embeddings that can learn position-specific patterns.
 - This approach treats each position as a learnable parameter, similar to token embeddings.
@@ -320,4 +321,5 @@ Step 3: Outer product → angles     Step 4: Interleave sin/cos
   = (max_len, embed_dim//2)          pe[:, 1::2] = cos(angles)
                                      = (max_len, embed_dim)
 ```
+
 
