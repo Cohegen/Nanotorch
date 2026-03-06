@@ -6,7 +6,7 @@ This modules gives some basic intuition about attention mechanism that allows mo
 
 -We can imagine attention as a libarary research system whereby we have:
 -  **Query(Q)**: "I need information about quantum mechanics"
--**Keys (K)**: Index cards describing each book's content
+-  **Keys (K)**: Index cards describing each book's content
 - **Values(V)**: the actual books on the shelves
 - **Attention Process**:finding books whose description matches our query then we retrieve those books.
 
@@ -325,6 +325,7 @@ n-> 2n
 (2n^2)^2 =4n^2
 ```
 - So compute comes 4x larger
+
 
 
 
