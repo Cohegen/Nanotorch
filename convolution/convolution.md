@@ -14,6 +14,7 @@ Formally, **spatial operations** are image-processing operations where each outp
 ### Convolution in Action
 
 
+
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/convolution_kernel.png)
 
 
