@@ -153,7 +153,7 @@ Causal Mask (4 tokens):       After masking:
 | 1 | 1 | 1 | 1 |            | s7 | s8 | s9 | s10|
 +---+---+---+---+            +----+----+----+----+
 ```
-
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/causal_mask.png)
 
 
 ## Multi-Head Attention
@@ -320,6 +320,7 @@ n-> 2n
 (2n^2)^2 =4n^2
 ```
 -So compute comes 4x larger
+
 
 
 
