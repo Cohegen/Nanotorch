@@ -202,6 +202,8 @@ Causal Mask (4 tokens):       After masking:
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/transformer_attention_heads_qkv.png)
+
 
 ### The Multi-Head Process Detailed
 
@@ -320,6 +322,7 @@ n-> 2n
 (2n^2)^2 =4n^2
 ```
 -So compute comes 4x larger
+
 
 
 
