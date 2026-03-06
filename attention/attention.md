@@ -89,6 +89,11 @@ Output = 0.20×V₁ + 0.45×V₂ + 0.15×V₃ + 0.20×V₄
 - To find the full attention score matrix we just follow the rules of matrix-multiplication **matmul** as defined in Linear Algebra.
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/transformer_self_attention_score.png)
 
+- After this the attention scores in the attention scores matrix are normalized by **d_model(size of embedding vector of individual tokens)**.
+- Then they are normalized by the Softmax function.
+- After scaling and normalization the we obtain a new matrix called attention weights matrix.
+- Then we calculate the dot product of the attention weights and Values Matrices to obtain context aware embedding matrix.
+- The diagram below represents the above process.
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/self-attention-matrix-calculation-2.png)
 ### Dimensions and Shapes
 ```
@@ -109,8 +114,17 @@ Output: (batch_size, seq_len, d_model)  ← Weighted combination of values
 2. **Softmax**: n² weights to normalize = O(n²) operations
 3. **Weights×V**: n² weights applied to d-dimensional values = O(n² × d) operations
 
--The total **time complexity** is **O(n² × d)** per attention head. 
--The **memory complexity** is **O(n²)** for storing the attention weight matrix. -This quadratic scaling in sequence length is attention's blessing (global connectivity) and curse (memory/compute limits).
+- The total **time complexity** is **O(n² × d)** per attention head. 
+- The **memory complexity** is **O(n²)** for storing the attention weight matrix. -This quadratic scaling in sequence length is attention's blessing (global connectivity) and curse (memory/compute limits).
+- The  complexity taking only comparisons in account is only **n²** .
+- In the Attention matrix in the next section, each there's 16 token comparisons.
+- The token **The** is compared 4 times to itself and other tokens, if we add up all token comparisons we obtain 16 token comparisons.
+- Given an input sequence length 4 the total token comparison is 16 hence we make a conclusion, given an input of size **n** total comparisons are **n²**.
+- By including the cost of the vector dot product, the complexity of attention becomes **O(n²d)**.
+- This is because computing the attention matrix involves multiplying an **n × d** matrix with a **d × n** matrix.
+- Each element of the resulting **n × n** matrix is computed using a dot product between a row vector and a column vector of length **d**.
+- Since a dot product requires **d multiplications**, each of the **n² elements** costs **O(d)**.
+- Therefore, the total complexity becomes:**O(n²) × O(d) = **O(n²d)**
 
 ### The Attention Matrix Visualization
 ```
@@ -140,14 +154,7 @@ Causal Mask (4 tokens):       After masking:
 +---+---+---+---+            +----+----+----+----+
 ```
 
-### Scaled Dot-Product Attention
--Scaled dot-product attention is the core operation inside Transformers.
--It computes how much each token should pay attention to every other token.
-- It follows the pipeline below:
 
-```
-Pipeline: Q,K -> scores -> scale -> mask -> softmax -> weights @ V -> output
-```
 
 ## Multi-Head Attention
 - Multi-head attention runs multiple attention "heads" in parallel, each learning to focus on different types of relationships.
@@ -313,6 +320,7 @@ n-> 2n
 (2n^2)^2 =4n^2
 ```
 -So compute comes 4x larger
+
 
 
 
