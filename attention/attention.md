@@ -66,6 +66,7 @@ Values: "What actual content can I retrieve?"
 │ V₄: [content from position 4]       │ ← Value 4 (actual information)
 └─────────────────────────────────────┘
 ```
+- We obtain the **Query**, **Key** and **Value** matrices by calculating the dot product of our input embedding matrrx **X** with WQ(weight matrix for Query),WK(weight matrix for Key) and WV (weight matrix for Value) respectively.
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/self-attention-matrix-calculation.png)
 ### The Attention Process 
 ```
@@ -306,4 +307,5 @@ n-> 2n
 (2n^2)^2 =4n^2
 ```
 -So compute comes 4x larger
+
 
