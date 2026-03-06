@@ -2,7 +2,7 @@
 This modules gives some basic intuition about attention mechanism that allows models to focus on relevant parts of the input when processing sequences.
 
 ## Attention Mechanism Intuition
--Instead of processing words strictly left to right like how it was initially done in RNNs(Recurrent Neural Networks), attention let's every word look at every other word and decide what matters.
+- Instead of processing words strictly left to right like how it was initially done in RNNs(Recurrent Neural Networks), attention let's every word look at every other word and decide what matters.
 
 -We can imagine attention as a libarary research system whereby we have:
 -  **Query(Q)**: "I need information about quantum mechanics"
@@ -325,6 +325,7 @@ n-> 2n
 (2n^2)^2 =4n^2
 ```
 - So compute comes 4x larger
+
 
 
 
