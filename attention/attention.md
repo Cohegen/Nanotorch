@@ -240,8 +240,8 @@ Each head can specialize in different patterns:
 This parallelization allows the model to attend to different representation subspaces simultaneously.
 
 ### Why Attention has complexity of O(n^2)
--After running the programs with prefix "analyze" in this directory, you will make a certain conclusion.
--That is that attention has a time complexity of O(n^2).
+- After running the programs with prefix "analyze" in this directory, you will make a certain conclusion.
+- That is that attention has a time complexity of O(n^2).
 - If a sequence has:
 
 ```
@@ -256,16 +256,16 @@ A = QK^T
 Q =queries -> shape n x d_model
 K = keys -> shape n x d_model
 ```
--Multiplying them gives
+- Multiplying them gives
 ```
 A 
 ```
--Meaning, every token compatres itself with every other token.
+- Meaning, every token compatres itself with every other token.
 - So implying that total comparisions are:
 ```
 nxn = n^2
 ```
-So, computation is O(n^2 d) and memory O(n^2).
+- So, computation is O(n^2 d) and memory O(n^2).
 
 ### Why Memory Explodes Faster than Expected
 -Attention matrix stores float values.
@@ -275,7 +275,7 @@ So, computation is O(n^2 d) and memory O(n^2).
  n^2 x 2 bytes
 
 ```
--Example:
+- Example:
 ```
 1024 tokens
 
@@ -292,7 +292,7 @@ Example GPT3
 heads = 96
 layers = 96
 ```
--So per layer:
+- So per layer:
 ```
 2MB X 2 (softmax + intermediate) = 4MB
 ```
@@ -302,16 +302,16 @@ layers = 96
 ```
 
 ### Why Time also EXplodes
--Computational Cost:
+- Computational Cost:
 ```
 QK^T
 ```
--Multiplying:
+- Multiplying:
 ```
 (nxd).(dxn)
 
 ```
-Complexity:
+- Complexity:
 
 ```
 O(n^2 d)
@@ -320,11 +320,12 @@ O(n^2 d)
 ```
 n-> 2n
 ```
--Computation becomes:
+- Computation becomes:
 ```
 (2n^2)^2 =4n^2
 ```
--So compute comes 4x larger
+- So compute comes 4x larger
+
 
 
 
