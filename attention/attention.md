@@ -69,6 +69,8 @@ Values: "What actual content can I retrieve?"
 - We obtain the **Query**, **Key** and **Value** matrices by calculating the dot product of our input embedding matrrx **X** with **WQ(weight matrix for Query)**,**WK(weight matrix for Key)** and **WV (weight matrix for Value)** respectively.
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/self-attention-matrix-calculation.png)
 ### The Attention Process 
+- After obtaining the query,key and value matrices, we need to compute the attention scores , then scale them by dividing the attention scores matrix by square root of **d_model** and finally normalize them by softmax function.
+- The entire process is highlighted below:
 ```
 Step 1: Compute Similarity Scores
 Q · K₁ = 0.64    Q · K₂ = 0.81    Q · K₃ = 0.35    Q · K₄ = 0.42
@@ -83,6 +85,7 @@ Softmax = [0.20, 0.45, 0.15, 0.20]        ← Convert to probabilities
 Step 3: Weighted Combination
 Output = 0.20×V₁ + 0.45×V₂ + 0.15×V₃ + 0.20×V₄
 ```
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/transformer_self_attention_score.png)
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/self-attention-matrix-calculation-2.png)
 ### Dimensions and Shapes
 ```
@@ -307,6 +310,7 @@ n-> 2n
 (2n^2)^2 =4n^2
 ```
 -So compute comes 4x larger
+
 
 
 
