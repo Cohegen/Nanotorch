@@ -66,7 +66,7 @@ Values: "What actual content can I retrieve?"
 │ V₄: [content from position 4]       │ ← Value 4 (actual information)
 └─────────────────────────────────────┘
 ```
-
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/self-attention-matrix-calculation.png)
 ### The Attention Process 
 ```
 Step 1: Compute Similarity Scores
@@ -306,3 +306,4 @@ n-> 2n
 (2n^2)^2 =4n^2
 ```
 -So compute comes 4x larger
+
