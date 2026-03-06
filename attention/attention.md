@@ -85,7 +85,10 @@ Softmax = [0.20, 0.45, 0.15, 0.20]        ← Convert to probabilities
 Step 3: Weighted Combination
 Output = 0.20×V₁ + 0.45×V₂ + 0.15×V₃ + 0.20×V₄
 ```
+- The diagram below represents the calculation of attention scores, in this scenario, we are calculating the attention scores of the first row of the attention score matrix where we're multiplying first row of **Q(query matrix)** with columns of **K(key matrix)**.
+- To find the full attention score matrix we just follow the rules of matrix-multiplication **matmul** as defined in Linear Algebra.
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/transformer_self_attention_score.png)
+
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/self-attention-matrix-calculation-2.png)
 ### Dimensions and Shapes
 ```
@@ -310,6 +313,7 @@ n-> 2n
 (2n^2)^2 =4n^2
 ```
 -So compute comes 4x larger
+
 
 
 
