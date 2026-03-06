@@ -202,6 +202,7 @@ Causal Mask (4 tokens):       After masking:
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/transformer_attention_heads_qkv.png)
 
 
@@ -225,7 +226,7 @@ Head 8: Q₈(64) attends to K₈(64) → weights₈ → output₈(64)
 Step 4: Concatenate and Mix
 [output₁ ∥ output₂ ∥ ... ∥ output₈] (512) → Linear → Final(512)
 ```
-
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/transformer_multi-headed_self-attention-recap.png)
 ### Why Multiple Heads Are Powerful
 
 Each head can specialize in different patterns:
@@ -322,6 +323,7 @@ n-> 2n
 (2n^2)^2 =4n^2
 ```
 -So compute comes 4x larger
+
 
 
 
