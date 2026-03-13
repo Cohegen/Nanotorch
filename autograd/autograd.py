@@ -1187,12 +1187,13 @@ def enable_autograd(quiet=False):
         def tracked_relu_forward(self,x):
             """ReLU with gradient tracking."""
             result_data = np.maximum(0,x.data)
-            result =Tensor(result_data)
+            result = Tensor(result_data)
 
-            if x.requires_grad:
-                result.requires_grad = T
+            if getattr(x, "requires_grad", False):
+                result.requires_grad = True
                 result._grad_fn = ReLUBackward(x)
 
+            return result
         def tracked_softmax_forward(self,x,dim=-1):
             """Softmax with gradient tracking."""
             #call original forward to result using Tensor operations
@@ -1206,14 +1207,16 @@ def enable_autograd(quiet=False):
             return result 
 
         def tracked_gelu_forward(self,x):
-            """GELU with gradient tracking """
-            #call the original forward to get result 
+            """GELU with gradient tracking."""
+            # call the original forward to get result 
             result = _original_gelu_forward(self,x)
 
-            #attach the correct gradient function 
-            if x.requires_grad:
+            # attach the correct gradient function 
+            if getattr(x, "requires_grad", False):
                 result.requires_grad = True 
-                result._grad_fn =GELUBackward(x)
+                result._grad_fn = GELUBackward(x)
+
+            return result
 
         def tracked_bce_forward(self,predictions,targets):
             """Binary cross-entropy with gradient tracking."""
@@ -1292,8 +1295,6 @@ def enable_autograd(quiet=False):
         print("Autograd enabled!")
 
 enable_autograd(quiet=True)       
-
-
 
 
 
