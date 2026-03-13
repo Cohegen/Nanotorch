@@ -96,7 +96,7 @@ attention matrix -> O(n**2)
    - data
    - parameters
    - compute
-- This caling behavior led to foundation models.
+- This scaling behavior led to foundation models.
 
 
 ```
