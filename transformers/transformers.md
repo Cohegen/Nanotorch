@@ -335,6 +335,11 @@ y = [1.1,1.8,3.3]
 
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/residual_connection2.png)
 
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/residual_connection3.png)
+
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/residual_connection4.png)
+
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/residual_connection5.png)
 
 **Gradient Flow Visualization:**
 ```
@@ -908,6 +913,7 @@ memory bandwidth or capacity limits system performance
 - But : **memory cannot keep up**.
 - The GPU spends time waiting for memory transfers.
 - This becomes the main bottleneck.
+
 
 
 
