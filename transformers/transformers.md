@@ -760,6 +760,8 @@ stops**
 
 ##### 2.Dataset Size 
 - Training data must grow with model size.
+
+
 | Model | Dataset size |
 | :---      | :---        |
 | GPT-2    | ~40GB        |
@@ -902,3 +904,4 @@ memory bandwidth or capacity limits system performance
 - But : **memory cannot keep up**.
 - The GPU spends time waiting for memory transfers.
 - This becomes the main bottleneck.
+
