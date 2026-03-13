@@ -145,7 +145,7 @@ attention matrix -> O(n**2)
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Add picture of Transformer here
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/transformer1.png)
 
 ### Building Blocks of Transformer
 
@@ -904,4 +904,5 @@ memory bandwidth or capacity limits system performance
 - But : **memory cannot keep up**.
 - The GPU spends time waiting for memory transfers.
 - This becomes the main bottleneck.
+
 
