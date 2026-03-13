@@ -1,4 +1,7 @@
 # Introduction to Transformers Module
+
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/optimus.gif)
+
 - Transformers are the revolutionary architecture that powers modern AI languange models like DeepSeek, ChatGPT,Gemini,Claude etc.
 - The key breakthrough is **self-attention**, which allows every token in sequence to interact with every other token, creating rich contextual understanding.
 - The **self-attention** concepts are covered in depth in the **attention** module.
@@ -913,6 +916,7 @@ memory bandwidth or capacity limits system performance
 - But : **memory cannot keep up**.
 - The GPU spends time waiting for memory transfers.
 - This becomes the main bottleneck.
+
 
 
 
