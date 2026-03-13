@@ -2,7 +2,12 @@
 
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/optimus.gif)
 
+
+
+
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/megatronus.gif)
+
+
 
 - Transformers are the revolutionary architecture that powers modern AI languange models like DeepSeek, ChatGPT,Gemini,Claude etc.
 - The key breakthrough is **self-attention**, which allows every token in sequence to interact with every other token, creating rich contextual understanding.
