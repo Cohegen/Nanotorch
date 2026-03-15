@@ -683,13 +683,150 @@ For 50,000 samples: 8 × 50,000 = 400KB extra memory
 
 The key insight is shuffling overheard is typically negligible compared to the actual data loading and tensor operations.
 
-### Pipeline Bottleneck Identification
+## Practical Examples
 
-We measure three critical metrics i.e:
+Let's look at how to use these components in code.
 
-1.**Throughput**: Samples processed per second
-2. **Memory Usage** : Peak memory during batch loading
-3. **Overheard**: Time spent on data vs computation
+### 1. Creating a Custom Dataset
+If your data isn't already in memory as tensors (e.g., it's in CSV files or images on disk), you can create a custom `Dataset` class.
 
-These measurements will reveal whether our pipeline is CPU-bound(slow data loading) or compute-bound (slow model).
-The analysis is in the **analyze_dataloader_performance.py**
+```python
+from dataloader import Dataset
+from Tensor import Tensor
+import numpy as np
+
+class MyCustomDataset(Dataset):
+    def __init__(self, data_size=100):
+        # In a real app, you might load file paths here
+        self.features = np.random.randn(data_size, 10)
+        self.labels = np.random.randint(0, 2, size=(data_size,))
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        # Return a single sample as (feature_tensor, label_tensor)
+        x = Tensor(self.features[idx])
+        y = Tensor(self.labels[idx])
+        return x, y
+
+dataset = MyCustomDataset(data_size=1000)
+print(f"Dataset size: {len(dataset)}")
+```
+
+### 2. Using TensorDataset
+For data that is already loaded into memory as `Tensor` objects, `TensorDataset` is the easiest way to wrap them.
+
+```python
+from dataloader import TensorDataset
+from Tensor import Tensor
+import numpy as np
+
+# Create some dummy data
+X = Tensor(np.random.randn(5000, 32, 32, 3)) # 5000 RGB images
+Y = Tensor(np.random.randint(0, 10, size=(5000,))) # 10 classes
+
+# Wrap them in a dataset
+dataset = TensorDataset(X, Y)
+
+# Access a single sample
+x_0, y_0 = dataset[0]
+print(f"First image shape: {x_0.data.shape}")
+```
+
+### 3. Using the DataLoader
+The `DataLoader` handles batching and shuffling for you. This is what you actually iterate over during training.
+
+```python
+from dataloader import Dataloader
+
+# Create a loader
+train_loader = Dataloader(dataset, batch_size=32, shuffle=True)
+
+print(f"Number of batches: {len(train_loader)}")
+
+# Iterate through the data
+for batch_idx, (images, labels) in enumerate(train_loader):
+    # images.data.shape will be (32, 32, 32, 3)
+    # labels.data.shape will be (32,)
+    
+    # training_step(images, labels)
+    if batch_idx == 0:
+        print(f"Batch 0 images shape: {images.data.shape}")
+        break
+```
+
+### 4. Implementing Data Augmentation
+Use `Compose` to chain multiple transformations together.
+
+```python
+from dataloader import RandomHorizontalFlip, RandomCrop, Compose
+
+# Define a pipeline
+transform = Compose([
+    RandomHorizontalFlip(p=0.5),
+    RandomCrop(size=32, padding=4)
+])
+
+# Apply to an image (Tensor or NumPy array)
+img = Tensor(np.random.randn(32, 32, 3))
+augmented_img = transform(img)
+
+# In a real custom dataset, you would apply this in __getitem__:
+class AugmentedDataset(Dataset):
+    def __init__(self, images, labels, transform=None):
+        self.images = images
+        self.labels = labels
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        img = self.images[idx]
+        label = self.labels[idx]
+        
+        if self.transform:
+            img = self.transform(img)
+            
+        return img, label
+```
+
+### 5. Full Pipeline Example
+Putting it all together for a training loop structure.
+
+```python
+# 1. Prepare data
+X_train = Tensor(np.random.randn(1000, 3, 32, 32))
+Y_train = Tensor(np.random.randint(0, 10, size=(1000,)))
+
+# 2. Define transforms
+train_transform = Compose([
+    RandomHorizontalFlip(p=0.5),
+    RandomCrop(32, padding=4)
+])
+
+# 3. Create Dataset and DataLoader
+train_ds = AugmentedDataset(X_train, Y_train, transform=train_transform)
+train_loader = Dataloader(train_ds, batch_size=64, shuffle=True)
+
+# 4. Training Loop
+epochs = 5
+for epoch in range(epochs):
+    total_loss = 0
+    for images, labels in train_loader:
+        # 1. Forward pass
+        # outputs = model(images)
+        # loss = criterion(outputs, labels)
+        
+        # 2. Backward pass
+        # loss.backward()
+        
+        # 3. Update weights
+        # optimizer.step()
+        # optimizer.zero_grad()
+        pass
+    
+    print(f"Epoch {epoch+1} complete")
+```
+
