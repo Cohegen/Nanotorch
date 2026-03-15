@@ -44,9 +44,9 @@ The chain rule automatically flows gradients through the entire graph.
 ```
 
 Each operation records how to compute its backward pass. The chain rule connects them all.
-"""
 
-"""
+
+
 ## Mathematical Intuition of Chain Rule
 
 For composite function : f(g(x)), the derivative is:
@@ -55,7 +55,7 @@ df/dx = (df/dg) x (dg/dx)
 
 ```
 
-###Computational Graph example
+### Computational Graph example
 
 ```
 Simple computation : L = (x*y + 5)**2
@@ -79,7 +79,7 @@ Forward Pass:
   ∇y=44 ←──┘
 ```
 
-###Memory Layout During Backpropagation
+### Memory Layout During Backpropagation
 ```
 Computation Graph Memory Structure:
 ┌─────────────────────────────────────────────────────────┐
@@ -98,10 +98,8 @@ Computation Graph Memory Structure:
 Memory Cost: 2× parameters (data + gradients) + graph overhead
 ```
 
-"""
 
-"""
-##Implementation phase: Building the Autograd Engine
+## Implementation phase: Building the Autograd Engine
 We will enhance the existing Tensor class and create a supporting infrastructure.
 
 ### The function Architecture
@@ -148,9 +146,8 @@ Backward: grad_output → Function.apply() → grad_inputs
 This pattern enables the chain rule to flow gradients through complex computations.
 ```
 The code of this class is in **autograd.py**
-"""
 
-"""
+
 ### Operation Functions / implement Gradients rules
 Here we will implement specific operations that compute gradients correctly.
 Each operation has mathematical rules for how gradients flow backward.
@@ -181,10 +178,10 @@ Matrix Multiplication (Z = A @ B):
 ```
 Each operation stores the inputs it needs for computing gradients.
 
-"""
 
-"""
-##AddBackward - Gradient Rules for Addition
+
+
+## AddBackward - Gradient Rules for Addition
 
 Addition is the simplest gradiet operation: gradients flow unchanged to both inputs.
 
@@ -203,9 +200,7 @@ By chain rule:
 When tensors have different shapes, Numpy broadcasts automatically in forward pass, but we must "unbroadcast" gradients in backward pass to match original shapes.
 
 Add backward is in **autograd.py**
-"""
 
-"""
 ### MulBackward 
 These are gradient rules for Element-wise multiplication
 
@@ -229,10 +224,10 @@ Backward: grad_z=[1,1]
           grad_a = grad_z * b = [1,1] * [4,5] = [4,5]
           grad_b = grad_z * a = [1,1] * [2,3] = [2,3]
 ```
-"""
 
-"""
-##SubBackward
+
+
+## SubBackward
 These are gradient rules for subtraction
 
 Subtraction is mathematically simple but important for operations like normalization
@@ -244,9 +239,7 @@ If z = a - b, then:
 ∂z/∂b = -1
 
 Gradient flow forward to the first operand, but **negated* to the second.
-"""
 
-"""
 ### DivBackward
 They are gradient rules for division
 
@@ -263,10 +256,8 @@ If z = a / b, then:
 **Quotient Rule:** For z = f/g, dz = (g·df - f·dg)/g²
 
 
-"""
 
-"""
-##MatmulBackward 
+## MatmulBackward 
 Gradient Rules for Matrix multiplication
 
 Matrix multiplication has more complex gradient rules based on matrix calculus.
@@ -292,10 +283,8 @@ Forward:  A(m×k) @ B(k×n) = Z(m×n)
 Backward: grad_Z(m×n) @ B.T(n×k) = grad_A(m×k) ✓
           A.T(k×m) @ grad_Z(m×n) = grad_B(k×n) ✓
 ```
-"""
 
-""
-##SumBackward
+## SumBackward
 Sum operations reduce tensor dimensions, so gradients must be broadcast back.
 
 **Mathematical Principle:**
@@ -314,9 +303,7 @@ Case 2: Axis sum
   Forward:  a=[[1,2],[3,4]] → sum(axis=0) → z=[4,6]
   Backward: grad_z=[1,1] → broadcast → grad_a=[[1,1],[1,1]]
 ```
-"""
 
-"""
 ## The Heart of Autograd: The `backward()` Method
 
 The `backward()` method is the engine that drives the learning process. It implements **Reverse-Mode Automatic Differentiation**, a two-step process:
