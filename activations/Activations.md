@@ -17,9 +17,20 @@ $$\sigma(x) = \frac{1}{1 + e^{-x}}$$
 **Key Characteristics:**
 - **Range:** (0, 1)
 - **Use Case:** Binary classification, gating mechanisms (e.g., LSTMs).
-- **Implementation Note:** To prevent numerical overflow from large negative values of $x$, our implementation clips inputs to $[-500, 500]$ and uses a numerically stable formulation:
-  - For $x \ge 0$: $1 / (1 + e^{-x})$
-  - For $x < 0$: $e^x / (1 + e^x)$
+- **Implementation Note:** To prevent numerical overflow from large negative values of $x$, our implementation clips inputs to $[-500, 500]$ and uses a numerically stable formulation.
+
+**Usage Example:**
+```python
+from activations.activations import Sigmoid
+from Tensor import Tensor
+import numpy as np
+
+sigmoid = Sigmoid()
+x = Tensor(np.array([-1.0, 0.0, 1.0]))
+output = sigmoid(x)
+print(output.data) 
+# Output: [0.26894142, 0.5, 0.73105858]
+```
 
 ---
 
@@ -33,7 +44,19 @@ $$f(x) = \max(0, x)$$
 - **Range:** [0, $\infty$)
 - **Use Case:** Hidden layers in CNNs and MLP.
 - **Pros:** Computationally efficient, helps mitigate the vanishing gradient problem.
-- **Cons:** Can lead to "dying ReLU" neurons where nodes stop updating entirely if they fall into the zero-gradient region.
+
+**Usage Example:**
+```python
+from activations.activations import ReLU
+from Tensor import Tensor
+import numpy as np
+
+relu = ReLU()
+x = Tensor(np.array([-2.0, -0.5, 1.0, 2.0]))
+output = relu(x)
+print(output.data)
+# Output: [0.0, 0.0, 1.0, 2.0]
+```
 
 ---
 
@@ -46,8 +69,19 @@ $$\tanh(x) = \frac{e^x - e^{-x}}{e^x + e^{-x}}$$
 **Key Characteristics:**
 - **Range:** (-1, 1)
 - **Use Case:** RNN hidden states, hidden layers where zero-centered output is preferred.
-- **Pros:** Zero-centered output.
-- **Cons:** Still susceptible to vanishing gradients for very large or small inputs.
+
+**Usage Example:**
+```python
+from activations.activations import Tanh
+from Tensor import Tensor
+import numpy as np
+
+tanh = Tanh()
+x = Tensor(np.array([-1.0, 0.0, 1.0]))
+output = tanh(x)
+print(output.data)
+# Output: [-0.76159416, 0.0, 0.76159416]
+```
 
 ---
 
@@ -60,7 +94,19 @@ $$GELU(x) \approx x \cdot \sigma(1.702x)$$
 **Key Characteristics:**
 - **Range:** $\approx$ [-0.17, $\infty$)
 - **Use Case:** Modern Transformers and LLMs.
-- **Pros:** Smoother gradients than ReLU; allows for a small amount of negative output, which can improve model expressivity.
+
+**Usage Example:**
+```python
+from activations.activations import GELU
+from Tensor import Tensor
+import numpy as np
+
+gelu = GELU()
+x = Tensor(np.array([-1.0, 0.0, 1.0]))
+output = gelu(x)
+print(output.data)
+# Output: [-0.1542426, 0.0, 0.8457574]
+```
 
 ---
 
@@ -73,7 +119,22 @@ $$\text{Softmax}(x_i) = \frac{e^{x_i}}{\sum_j e^{x_j}}$$
 **Key Characteristics:**
 - **Range:** (0, 1), with $\sum \text{outputs} = 1.0$.
 - **Use Case:** Multi-class classification output layers.
-- **Implementation Note:** To ensure numerical stability and prevent `NaN` values from large exponents, we subtract the maximum value of the input vector before computing the exponentials: $e^{x_i - \max(x)}$.
+- **Implementation Note:** Uses the "Max Subtraction" trick for numerical stability.
+
+**Usage Example:**
+```python
+from activations.activations import Softmax
+from Tensor import Tensor
+import numpy as np
+
+softmax = Softmax()
+# Logits for 3 classes
+x = Tensor(np.array([2.0, 1.0, 0.1]))
+output = softmax(x, dim=0)
+print(output.data)
+# Output: [0.65900114, 0.24243297, 0.09856589]
+print(np.sum(output.data)) # Always 1.0
+```
 
 ---
 
