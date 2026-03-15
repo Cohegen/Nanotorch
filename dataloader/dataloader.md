@@ -1,4 +1,4 @@
-"""
+
 ## Understanding the Data Pipeline
 
 ## The Data Pipeline Journey
@@ -692,5 +692,4 @@ We measure three critical metrics i.e:
 3. **Overheard**: Time spent on data vs computation
 
 These measurements will reveal whether our pipeline is CPU-bound(slow data loading) or compute-bound (slow model).
-The analyis is in the **analyze_dataloader_performance.py**
-"""
+The analysis is in the **analyze_dataloader_performance.py**
