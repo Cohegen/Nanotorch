@@ -1,4 +1,4 @@
-"""
+
 ## Introduction to Automatic Differentiation
 
 Automatic differentiation (autograd) is the magic that makes neural networks learn.
@@ -317,49 +317,132 @@ Case 2: Axis sum
 """
 
 """
-## Enhancing Tensor with Autograd Capabilities
+## The Heart of Autograd: The `backward()` Method
 
-Here we will inhance the existing Tensor class to use these gradient functions and build computation graphs automatically.
+The `backward()` method is the engine that drives the learning process. It implements **Reverse-Mode Automatic Differentiation**, a two-step process:
 
-**Computation Graph Formation:**
-```
-Before Autograd:             After Autograd:
-  x → operation → y           x → [Function] → y
-                                     ↓
-                               Stores operation
-                               for backward pass
-```
+1.  **Forward Pass**: As you perform operations, a "Computation Graph" is built. Each `Tensor` resulting from an operation stores a reference to a `_grad_fn` (a `Function` object like `AddBackward`).
+2.  **Backward Pass**: When you call `loss.backward()`, the engine traverses this graph in reverse order (from the output back to the inputs), applying the chain rule at each step.
 
-**The Enhancement Strategy:**
-1. **Add backward() method** - Triggers gradient computation
-2. **Enhanced operations** - Replace simple operations with gradient-tracking versions
-3. **Track computation graphs** - each tensor remembers how it was created.
-4. **Maintain compatibility** - All existing code continues to work
+### How `backward()` works internally:
+```python
+def backward(self, gradient=None):
+    # 1. Initialize gradient for the output (usually 1.0 for scalars)
+    if gradient is None:
+        gradient = np.ones_like(self.data)
 
-**Critical Desing Decision:**
-We enhance the EXISTING Tensor class rather than create a new one.
-This means that:
-- All previous modules continuw working unchanged
-- No imports changes needed
-- Gradients are "opt-in" via required_grad=True
-- No confusion between Tensor types
+    # 2. Accumulate the gradient in self.grad
+    if self.grad is None:
+        self.grad = np.zeros_like(self.data)
+    self.grad += gradient
 
-"""
-### The enable_autograd() Function
-
-This function is the key that brings gradients to life.
-It enhances the existing Tensor class with autograd capabilities by :
-
-1. **Monkey-patching operations** - Replaces `__add__`, `__mul__`, etc. with gradient-aware versions
-2. **Adding backward() method** - Implements reverse-mode automatic differentiation
-3. **Maintaining compatibility** - All existing code continues to work unchanged
-
-**The Pattern:**
-```
-Original: x + y → simple addition
-Enhanced: x + y → addition + gradient tracking (if requires_grad=True)
+    # 3. Propagate to parents
+    if hasattr(self, '_grad_fn'):
+        # Apply the specific gradient rule for this operation
+        grads = self._grad_fn.apply(gradient)
+        
+        # Recursively call backward on each input tensor
+        for tensor, grad in zip(self._grad_fn.saved_tensors, grads):
+            if isinstance(tensor, Tensor) and tensor.requires_grad:
+                tensor.backward(grad)
 ```
 
-"""
+## Managing Gradients: `requires_grad` and `zero_grad()`
+
+### `requires_grad=True`
+Not all tensors need gradients (e.g., input data or constants). We use `requires_grad=True` to tell the engine to start tracking operations for a specific tensor.
+- **Leaf Tensors**: Tensors you create (like weights `W`).
+- **Non-Leaf Tensors**: Tensors created by operations (like `z = x @ W`). They inherit `requires_grad=True` if any of their inputs require it.
+
+### `zero_grad()`
+In training loops, gradients are **accumulated** (added) into the `.grad` attribute every time `backward()` is called. This is useful for some advanced architectures, but normally, we want to start fresh for each batch.
+```python
+# Standard Training Pattern
+for epoch in range(epochs):
+    for x, y in dataloader:
+        optimizer.zero_grad()  # Reset gradients to None/Zero
+        loss = model(x).compute_loss(y)
+        loss.backward()        # Compute new gradients
+        optimizer.step()       # Update weights
+```
+
+## Advanced Gradient Operations
+
+Our autograd engine supports complex operations beyond basic arithmetic:
+
+### 1. Reshape and Transpose
+Moving data around doesn't change its values, but we must "move the gradients back" the same way.
+- **Reshape**: If you reshaped `(4, 3)` to `(12,)`, the backward pass reshapes the gradient from `(12,)` back to `(4, 3)`.
+- **Transpose**: The gradient of a transpose is simply the transpose of the gradient.
+
+### 2. Slicing and Indexing (`SliceBackward`)
+When you take a slice `y = x[0:5]`, only those 5 elements contribute to the output.
+- **Backward**: Gradients flow back to those specific 5 positions in `x`, while all other positions get a gradient of `0`.
+
+### 3. Embeddings (`EmbeddingBackward`)
+Embeddings are like a massive lookup table.
+- **Forward**: Pick rows `[1, 5, 2]` from the weight matrix.
+- **Backward**: Accumulate gradients into rows `1, 5, and 2` of the weight matrix. If the same index is picked multiple times (e.g., `[1, 1, 2]`), the gradients for index `1` are **summed**.
+
+## Handling Broadcasting in Backward Pass
+
+Broadcasting allows operations on tensors of different shapes (e.g., `(10, 5) + (5,)`). During the backward pass, we must "un-broadcast" the gradient to match the original smaller shape.
+```python
+# If gradient shape is (10, 5) but input was (5,)
+# We sum across the broadcasted dimension (axis 0)
+summed_grad = grad.sum(axis=0) # Result shape: (5,)
+```
+
+## Activation and Loss Function Gradients
+
+Autograd isn't limited to `+` and `*`. We've integrated it directly into our activation functions:
+
+| Function | Forward | Backward Derivative |
+| :--- | :--- | :--- |
+| **ReLU** | `max(0, x)` | `1 if x > 0 else 0` |
+| **Sigmoid** | `1 / (1 + e^-x)` | `σ(x) * (1 - σ(x))` |
+| **Softmax** | `e^x / Σe^x` | `softmax * (grad - sum(grad * softmax))` |
+| **MSE Loss** | `mean((p-y)²)` | `2 * (p - y) / N` |
+
+## Practical Example: A Simple Neuron
+
+Here is how all these concepts come together to train a single neuron:
+
+```python
+import numpy as np
+from autograd.autograd import enable_autograd
+from Tensor import Tensor
+
+enable_autograd()
+
+# 1. Setup inputs and weights
+x = Tensor([2.0, 3.0])
+w = Tensor([0.5, -0.5], requires_grad=True)
+b = Tensor([0.1], requires_grad=True)
+target = Tensor([1.0])
+
+# 2. Forward Pass (Graph built automatically)
+z = (x * w).sum() + b
+prediction = z.sigmoid() # Assuming sigmoid is patched
+
+# 3. Compute Loss
+loss = ((prediction - target) ** 2)
+
+# 4. Backward Pass
+loss.backward()
+
+# 5. Check Gradients
+print(f"Weight grads: {w.grad}")
+print(f"Bias grad: {b.grad}")
+
+# 6. Update (Manual Optimization)
+lr = 0.01
+w.data -= lr * w.grad
+b.data -= lr * b.grad
+
+# 7. Reset for next step
+w.zero_grad()
+b.zero_grad()
+```
 
 
