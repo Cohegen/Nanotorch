@@ -1,7 +1,7 @@
 
 ![Output examples](azula.gif)
 
-"""
+
 
 ## MISSION
 - This repo intends to showcase the implementation of Pytorch one of the most popular ML libraries from Scratch in pure Python.
@@ -10,6 +10,9 @@
 - The implementation is still on so, the code in this repo is not fully complete.
 
 ## Collaboration
-- I'm open for collaboration this project and also in future  when I implement this project in either pure C or C++
+- I'm open for collaboration this project and also in future  when I implement this project in either pure C or C++.
 
-"""
+## Issues
+- If you face any issue in the mean time kindly notify me.
+
+
