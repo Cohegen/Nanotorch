@@ -1,113 +1,116 @@
-### Computational Cost Analysis
+# Activation Functions
+
+Activation functions are mathematical equations that determine the output of a neural network node. They introduce **non-linearity** into the network, allowing it to learn complex patterns in data. Without non-linear activation functions, a multi-layer neural network would behave like a single-layer linear model, regardless of how many layers it has.
+
+This module implements several key activation functions used in modern deep learning architectures.
+
+---
+
+## Implemented Activations
+
+### 1. Sigmoid
+The Sigmoid function maps any real-valued number into a range between 0 and 1. It is traditionally used in the output layer of binary classification models.
+
+**Formula:**
+$$\sigma(x) = \frac{1}{1 + e^{-x}}$$
+
+**Key Characteristics:**
+- **Range:** (0, 1)
+- **Use Case:** Binary classification, gating mechanisms (e.g., LSTMs).
+- **Implementation Note:** To prevent numerical overflow from large negative values of $x$, our implementation clips inputs to $[-500, 500]$ and uses a numerically stable formulation:
+  - For $x \ge 0$: $1 / (1 + e^{-x})$
+  - For $x < 0$: $e^x / (1 + e^x)$
+
+---
+
+### 2. ReLU (Rectified Linear Unit)
+ReLU is the most widely used activation function for hidden layers. It outputs the input directly if it is positive; otherwise, it outputs zero.
+
+**Formula:**
+$$f(x) = \max(0, x)$$
+
+**Key Characteristics:**
+- **Range:** [0, $\infty$)
+- **Use Case:** Hidden layers in CNNs and MLP.
+- **Pros:** Computationally efficient, helps mitigate the vanishing gradient problem.
+- **Cons:** Can lead to "dying ReLU" neurons where nodes stop updating entirely if they fall into the zero-gradient region.
+
+---
+
+### 3. Tanh (Hyperbolic Tangent)
+Tanh is similar to Sigmoid but maps inputs to a range between -1 and 1. It is zero-centered, which often makes optimization easier than Sigmoid.
+
+**Formula:**
+$$\tanh(x) = \frac{e^x - e^{-x}}{e^x + e^{-x}}$$
+
+**Key Characteristics:**
+- **Range:** (-1, 1)
+- **Use Case:** RNN hidden states, hidden layers where zero-centered output is preferred.
+- **Pros:** Zero-centered output.
+- **Cons:** Still susceptible to vanishing gradients for very large or small inputs.
+
+---
+
+### 4. GELU (Gaussian Error Linear Unit)
+GELU is a smooth approximation of ReLU that weights inputs by their percentile rather than a hard threshold. It is the standard activation function in modern Transformer models (GPT, BERT).
+
+**Formula (Approximation):**
+$$GELU(x) \approx x \cdot \sigma(1.702x)$$
+
+**Key Characteristics:**
+- **Range:** $\approx$ [-0.17, $\infty$)
+- **Use Case:** Modern Transformers and LLMs.
+- **Pros:** Smoother gradients than ReLU; allows for a small amount of negative output, which can improve model expressivity.
+
+---
+
+### 5. Softmax
+Softmax turns a vector of numbers into a vector of probabilities that sum to 1. It is almost exclusively used in the final layer of multi-class classification models.
+
+**Formula:**
+$$\text{Softmax}(x_i) = \frac{e^{x_i}}{\sum_j e^{x_j}}$$
+
+**Key Characteristics:**
+- **Range:** (0, 1), with $\sum \text{outputs} = 1.0$.
+- **Use Case:** Multi-class classification output layers.
+- **Implementation Note:** To ensure numerical stability and prevent `NaN` values from large exponents, we subtract the maximum value of the input vector before computing the exponentials: $e^{x_i - \max(x)}$.
+
+---
+
+## Computational Cost Analysis
 
 Different activations have different computational profiles:
 
-**ReLU: O(n) comparisons**
-- Simple element-wise comparison: max(0, x)
-- Fastest activation function (baseline)
-- No exponentials, no divisions
-- Ideal for large hidden layers
+- **ReLU: O(n) comparisons** (Fastest)
+- **Sigmoid/Tanh: O(n) exponentials** (3-4× slower than ReLU)
+- **GELU: O(n) exponentials + multiplications** (4-5× slower than ReLU)
+- **Softmax: O(n) exponentials + O(n) sum + O(n) divisions** (Most expensive)
 
-**Sigmoid/Tanh: O(n) exponentials**
-- Each element requires exp() computation
-- 3-4× slower than ReLU
-- Exponentials are expensive operations
-- Use sparingly in hidden layers
-
-**GELU: O(n) exponentials + multiplications**
-- Approximation involves sigmoid (exponential)
-- 4-5× slower than ReLU
-- Worth the cost in transformers (better gradients)
-- Trade-off: performance vs. optimization quality
-
-**Softmax: O(n) exponentials + O(n) sum + O(n) divisions**
-- Most expensive: exp, sum, divide for entire vector
-- Use only for output layers (not hidden layers)
-- Requires synchronization across dimension
-- Numerical stability tricks add overhead
-
-### Numerical Stability Considerations
+## Numerical Stability Considerations
 
 Activations can fail catastrophically without proper handling:
 
-**Sigmoid/Tanh overflow:**
-```
-Problem: exp(1000) = inf, exp(-1000) = 0
-Solution: Clip inputs to reasonable range (±500)
-Our implementation: Uses stable computation for Sigmoid
-```
+- **Sigmoid/Tanh overflow:** Large inputs lead to `exp(x)` exceeding float limits. We use clipping and stable math to avoid this.
+- **Softmax overflow:** Large positive logits cause `exp(x)` to return `inf`. We use the "Max Subtraction" trick to keep exponents $\le 0$.
+- **ReLU dying neurons:** Monitoring is required to ensure a significant portion of the network doesn't "die" (permanently output 0).
 
-**Softmax catastrophic overflow:**
-```
-Problem: exp(1000) = inf, causing NaN
-Solution: Subtract max before exp (doesn't change result)
-Your implementation: Uses max subtraction in Softmax.forward()
-```
+## Gradient Behavior Preview
 
-**ReLU dying neurons:**
-```
-Problem: Large negative gradient → weights become negative → ReLU always outputs 0
-Solution: Monitor dead neuron percentage, use LeakyReLU variants
+Understanding gradient characteristics helps diagnose training issues:
 
-```
+- **ReLU:** Constant gradient (1) for $x > 0$, but zero for $x < 0$. No vanishing gradients, but neurons can die.
+- **Sigmoid/Tanh:** Gradients "vanish" (approach zero) for large absolute inputs, making deep networks hard to train.
+- **GELU:** Smooth gradient everywhere, avoiding the sharp discontinuity of ReLU while maintaining similar benefits.
+- **Softmax:** Gradients are coupled across the entire dimension (Jacobian matrix), making the backward pass more complex.
 
-### Gradient Behavior Preview
+---
 
-understanding gradient characteristics helps:
+## Selection Guide Summary
 
-**ReLU gradient: Sharp discontinuity**
-- Gradient = 1 if x > 0, else 0
-- Sharp corner at zero
-- Dead neurons never recover (gradient = 0 forever)
-
-
-**Sigmoid/Tanh gradient: Vanishing problem**
-- Gradient ≈ 0 for large |x|
-- Deep networks struggle (gradients die in early layers)
-- Why ReLU replaced sigmoid in hidden layers
-
-**GELU gradient: Smooth everywhere**
-- No sharp corners (unlike ReLU)
-- No vanishing at extremes (like sigmoid)
-- Best of both worlds (modern architectures use this)
-
-**Softmax gradient: Coupled across dimension**
-- Changing one input affects all outputs
-- Jacobian matrix (not element-wise)
-- More complex backward pass than others
-
-  
-### Activation Selection Guide
-
-**When to Use Each Activation:**
-
-**Sigmoid**
-- **Use case**: Binary classification output layers, gates in LSTMs/GRUs
-- **Production example**: Spam detection (output: probability of spam)
-- **Why**: Outputs valid probabilities in (0, 1)
-- **Avoid**: Hidden layers in deep networks (vanishing gradients)
-
-**ReLU**
-- **Use case**: Hidden layers in CNNs, feedforward networks
-- **Production example**: Image classification networks (ResNet, VGG)
-- **Why**: Fast computation, prevents vanishing gradients, creates sparsity
-- **Avoid**: Output layers (can't output negative values or probabilities)
-
-**Tanh**
-- **Use case**: RNN hidden states, when zero-centered outputs matter
-- **Production example**: Sentiment analysis RNNs, time series prediction
-- **Why**: Zero-centered helps with gradient flow in recurrent networks
-- **Avoid**: Very deep networks (still suffers from vanishing gradients)
-
-**GELU**
-- **Use case**: Transformer models, modern architectures
-- **Production example**: GPT, BERT, modern language models
-- **Why**: Smooth approximation of ReLU, better gradient flow, state-of-the-art results
-- **Avoid**: When computational efficiency is critical (slightly slower than ReLU)
-
-**Softmax**
-- **Use case**: Multi-class classification output layers
-- **Production example**: ImageNet classification (1000 classes), NLP token prediction
-- **Why**: Converts logits to valid probability distribution (sums to 1)
-- **Avoid**: Hidden layers (loses information through normalization)
-
+| Activation | Typical Layer | Primary Benefit |
+| :--- | :--- | :--- |
+| **ReLU** | Hidden (CNN/MLP) | Speed and sparsity |
+| **GELU** | Hidden (Transformers) | State-of-the-art performance |
+| **Tanh** | Hidden (RNN) | Zero-centered outputs |
+| **Sigmoid** | Output (Binary Class) | Probability mapping (0,1) |
+| **Softmax** | Output (Multi-class) | Probability distribution (sums to 1) |
