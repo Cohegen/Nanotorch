@@ -125,16 +125,14 @@ Function Class Design:
 └────────┘ └────────┘ └────────┘ └────────┘
 ```
 Each operation inherits from Fuction and implements specific gradients rules.
-"""
 
-"""
 ## Function Base Class 
 This class is the foundation that makes autograd possible.
 Every differentiable operation (addition,multiplication) inherits from this class.
 
 **Importance Function Base Class**
 - They remember inputs needed for backward pass.
-- They remember gradient computation via apply()\
+- They remember gradient computation via apply()
 - They connect from computation graphs
 - They enable the chain rule to flow gradients
 
@@ -233,12 +231,13 @@ These are gradient rules for subtraction
 Subtraction is mathematically simple but important for operations like normalization
 
 **Mathematical Principle:**
-``
+```
 If z = a - b, then:
 ∂z/∂a = 1
 ∂z/∂b = -1
 
-Gradient flow forward to the first operand, but **negated* to the second.
+Gradient flow forward to the first operand, but **negated** to the second.
+```
 
 ### DivBackward
 They are gradient rules for division
@@ -248,7 +247,6 @@ Division requires the quotient rule from calculus
 **Mathematical Principle:**
 
 ```
-
 If z = a / b, then:
 ∂z/∂a = 1/b
 ∂z/∂b = -a/b²
@@ -431,5 +429,3 @@ b.data -= lr * b.grad
 w.zero_grad()
 b.zero_grad()
 ```
-
-
