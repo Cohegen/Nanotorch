@@ -273,4 +273,124 @@ class QuantizedLinear:
             'compression_ratio':original_total / quantized_total if quantized_total > 0 else 1.0
         }
 
-        
+"""
+## Model Quantization
+We follow two steps
+   1.Collecing layer inputs- forward calibration data through preceding layers to get the activation
+     distribution at each layer's input.
+    2. Quantize single layer - replacing one Linear layer with its QuantizedLinear equivalent
+
+Then the composition function `quantize_model()` ties them together to transform a full model.
+
+```
+Model Transformation Process:
+
+Input Model:                    Quantized Model:
+┌─────────────────────────────┐    ┌─────────────────────────────┐
+│ layers[0]: Linear(784, 128) │    │ layers[0]: QuantizedLinear  │
+│ layers[1]: ReLU()           │    │ layers[1]: ReLU()           │
+│ layers[2]: Linear(128, 64)  │ →  │ layers[2]: QuantizedLinear  │
+│ layers[3]: ReLU()           │    │ layers[3]: ReLU()           │
+│ layers[4]: Linear(64, 10)   │    │ layers[4]: QuantizedLinear  │
+└─────────────────────────────┘    └─────────────────────────────┘
+   Memory: 100%                      Memory: ~25%
+   Interface: Same                   Interface: Identical
+```
+"""
+
+"""
+## Collecting Layer Inputs
+
+The helper function declared below helps us know what the inputs look like at runtime.
+This helper forwards calibration samples through all preceding layers to collect the activation tensors that
+arrive at a given layer index
+```
+Calibration Data Flow for Layer at Index i:
+
+  Sample Data          Layers 0..i-1          Activations at Layer i
+  ┌──────────┐      ┌──────────────────┐      ┌──────────────────┐
+  │ sample_0  │ ──→ │ forward through  │ ──→  │ activation_0     │
+  │ sample_1  │ ──→ │ preceding layers │ ──→  │ activation_1     │
+  │ ...       │     │ (0, 1, ..., i-1) │      │ ...              │
+  │ sample_N  │ ──→ │                  │ ──→  │ activation_N     │
+  └──────────┘      └──────────────────┘      └──────────────────┘
+```
+"""
+
+def __collect_layer_inputs(model,layer_index:int,calibration_data:List[Tensor],max_samples:int =10) ->List[Tensor]:
+    """
+    Forward calibration data through preceding layers to collect inputs for a specific layer.
+
+
+    Args:
+        model:Model with .layers attribute (Sequential pattern)
+        layer_index: Index of thr layer we want inputs for
+        calibration_data:List of sample input tensors
+        max_samples:Maximum numbers of samples to process
+
+    Returns:
+        List of Tensor activations arriving at layer_index
+
+     EXAMPLE:
+    >>> model = Sequential(Linear(4, 8), ReLU(), Linear(8, 3))
+    >>> samples = [Tensor(np.random.randn(1, 4)) for _ in range(5)]
+    >>> inputs_at_layer2 = _collect_layer_inputs(model, 2, samples)
+    >>> print(len(inputs_at_layer2))  # 5 activation tensors
+    5
+
+    """
+    sample_inputs = []
+    for data in calibration_data[:max_samples]:
+        x = data 
+        for j in range(layer_index):
+            x = model.layers[j].forward(x)
+        sample_inputs.append(x)
+
+    return sample_inputs
+
+
+"""
+   Quantizing a single Layer 
+This helper function takes one Linear layer, wraps it in a QuantizedLinear, and optionally
+calibrates it using pre-allocated activation samples.
+This is the atomic operation that `quantize_model` applies to each eligible layer.
+
+```
+Single Layer Quantization:
+
+  Linear Layer          QuantizedLinear
+  ┌──────────────┐      ┌──────────────────────────┐
+  │ weight: FP32 │  →   │ q_weight: INT8           │
+  │ bias: FP32   │      │ q_bias: INT8             │
+  │              │      │ weight_scale, zero_point  │
+  └──────────────┘      │ calibrated: Yes/No       │
+                        └──────────────────────────┘
+       4 bytes/param          1 byte/param + overhead
+```
+"""
+
+def _quantize_single_layer(layer:Linear,calibration_inputs:Optional[List[Tensor]]=None):
+    """
+    Quantizing a single Linear layer and optionally calibrating it.
+
+    Args:
+        layer:Liner layer to quantize
+        calibration_inputs : Optinal list activations tensors for calibration
+
+    Returns:
+         QuantizedLinear :The quantized replacement layer
+
+    EXAMPLE:
+    >>> original = Linear(8, 3)
+    >>> original.weight = Tensor(np.random.randn(8, 3) * 0.5)
+    >>> quantized = _quantize_single_layer(original)
+    >>> print(quantized.q_weight.data.dtype)
+    int8
+    """
+
+    quantized_layer = QuantizedLinear(layer)
+
+    if calibration_inputs is not None:
+        quantized_layer.calibrate(calibration_inputs)
+
+    return quantized_layer
