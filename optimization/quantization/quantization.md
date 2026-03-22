@@ -312,3 +312,4 @@ Per tensor:  s from (max - min) / 255, z from -128 - min/s (clamped)
 ```
 
 This closes the loop: you now have an ordered path from **problem** → **math** → **tensor** → **layer** → **model** → **stronger industrial variants**.
+For insights visit : "https://newsletter.maartengrootendorst.com/p/a-visual-guide-to-quantization"
