@@ -29,6 +29,8 @@ This module assumes you have already worked through:
 
 Quantization maps values from a **large** set (often many possible FP32 numbers) to a **small discrete** set (for example 256 INT8 levels). You **reduce precision** to save **memory** and often **compute**.
 
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/quantization_conversion_graph.webp)
+
 Neural networks can outgrow device RAM (the “memory wall”). If each weight uses 32 bits, a large model is measured in gigabytes; using 8 bits per weight cuts storage for weights by about **4×** (plus small overhead for scale/zero-point metadata).
 
 **Precision vs need:** FP32 has far more precision than most inference tasks require. INT8 is a common “sweet spot”: large memory savings with modest accuracy impact when scales are chosen well.
