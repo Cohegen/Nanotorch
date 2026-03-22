@@ -70,6 +70,8 @@ After (INT8):      each stored weight ≈ 8 bits  →  ~4× smaller weight stora
 
 ## Step 4 — Mapping FP32 → INT8 (the vocabulary)
 
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/fp32_to_int8.webp)
+
 Think of quantization like **analog → digital**: infinitely many FP32 values must land on **256** signed INT8 codes (`-128` … `127`).
 
 ```
