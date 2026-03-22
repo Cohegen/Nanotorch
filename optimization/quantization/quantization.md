@@ -354,4 +354,108 @@ Creation Time:                       Runtime:
 - **Our approach:** Dequantize -> FP32 computation
 - **Production:** INT8 GEMM operations (faster,more complex)
 - **Both achieve:** same memory saving, similar accuracy.
+
+## Scaling to Full Neural Netwoes
+
+### The Model Quantization Challenge
+- Quantizing individual tensors is useful, but real applications need to quantize entire neural networks with multiple layers, activations and complex data flows.
+- The key is replacing standard layers (like Linear) with quantized equivalent (QuantizedLinear) while keeping activation functions unchanged since they have no parameters.
+
+### Smart Layer Selection 
+- Not all layers benefit equally from quantization.
+- Linear and convolutional layers with many parameters see the largest benefits, while activation functions (which have no parameters) cannot be quantized.
+- Some layers like input/output projection may be sensitve to quantization and should be kept in higher precision for critical application. 
+
+### Calibration Data Flow
+- Calibration runs sample data through the model layer-by-layer,  collecting activation statistics (min/max values, distributions) determine optimal quantization parameters for each layer, ensuring minimal accuracy loss during quantization.
+
+### Memory Impact
+- Quantization provides  consistent 4x memory reduction across all model sizes.
+- The actual impact depends on model architecture, but the compression ratio remains constant since we're reducing precision from 32 bits to 8 bits per parameter.
+
+##  Advanced Quantization Strategies - Production Techniques
+
+This analysis compares different quantization approaches used in production systems, revealing the trade-offs between accuracy, complexity, and performance.
+
+```
+Strategy Comparison Framework:
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                          Three Advanced Strategies                             │
+├──────────────────────────┬──────────────────────────┬──────────────────────────┤
+│       Strategy 1         │       Strategy 2         │       Strategy 3         │
+│    Per-Tensor (Ours)     │    Per-Channel Scale     │    Mixed Precision       │
+├──────────────────────────┼──────────────────────────┼──────────────────────────┤
+│                          │                          │                          │
+│ ┌──────────────────────┐ │ ┌──────────────────────┐ │ ┌──────────────────────┐ │
+│ │ Weights:             │ │ │ Channel 1: scale₁   │ │ │ Sensitive: FP32      │ │
+│ │ [W₁₁ W₁₂ W₁₃]        │ │ │ Channel 2: scale₂   │ │ │ Regular: INT8        │ │
+│ │ [W₂₁ W₂₂ W₂₃] scale  │ │ │ Channel 3: scale₃   │ │ │                      │ │
+│ │ [W₃₁ W₃₂ W₃₃]        │ │ │                      │ │ │ Input: FP32          │ │
+│ └──────────────────────┘ │ │ Better precision     │ │ │ Output: FP32         │ │
+│                          │ │ per channel          │ │ │ Hidden: INT8         │ │
+│ Simple, fast             │ └──────────────────────┘ │ └──────────────────────┘ │
+│ Good baseline            │                          │                          │
+│                          │ More complex             │ Optimal accuracy         │
+│                          │ Better accuracy          │ Selective compression    │
+└──────────────────────────┴──────────────────────────┴──────────────────────────┘
+```
+
+**Strategy 1: Per-Tensor Quantization (Our Implementation)**
+```
+Weight Matrix:                Scale Calculation:
+┌─────────────────────────┐     ┌─────────────────────────┐
+│ 0.1 -0.3  0.8  0.2      │     │ Global min: -0.5        │
+│-0.2  0.5 -0.1  0.7      │ →   │ Global max: +0.8        │
+│ 0.4 -0.5  0.3 -0.4      │     │ Scale: 1.3/255 = 0.0051 │
+└─────────────────────────┘     └─────────────────────────┘
+
+Pros: Simple, fast           Cons: May waste precision
+```
+
+**Strategy 2: Per-Channel Quantization (Advanced)**
+```
+Weight Matrix:                Scale Calculation:
+┌─────────────────────────┐     ┌─────────────────────────┐
+│ 0.1 -0.3  0.8  0.2      │     │ Col 1: [-0.2,0.4] → s₁  │
+│-0.2  0.5 -0.1  0.7      │ →   │ Col 2: [-0.5,0.5] → s₂  │
+│ 0.4 -0.5  0.3 -0.4      │     │ Col 3: [-0.1,0.8] → s₃  │
+└─────────────────────────┘     │ Col 4: [-0.4,0.7] → s₄  │
+                             └─────────────────────────┘
+
+Pros: Better precision       Cons: More complex
+```
+
+**Strategy 3: Mixed Precision (Production)**
+```
+Model Architecture:            Precision Assignment:
+┌─────────────────────────┐     ┌─────────────────────────┐
+│ Input Layer  (sensitive) │     │ Keep in FP32 (precision) │
+│ Hidden 1     (bulk)     │ →   │ Quantize to INT8        │
+│ Hidden 2     (bulk)     │     │ Quantize to INT8        │
+│ Output Layer (sensitive)│     │ Keep in FP32 (quality)   │
+└─────────────────────────┘     └─────────────────────────┘
+
+Pros: Optimal trade-off      Cons: Requires expertise
+```
+
+**Experimental Design:**
+```
+Comparative Testing Protocol:
+
+1. Create identical test model   →  2. Apply each strategy        →  3. Measure results
+   ┌───────────────────────┐     ┌───────────────────────┐     ┌───────────────────────┐
+   │ 128 → 64 → 10 MLP      │     │ Per-tensor quantization │     │ MSE error calculation  │
+   │ Identical weights       │     │ Per-channel simulation  │     │ Compression measurement│
+   │ Same test input         │     │ Mixed precision setup   │     │ Speed comparison       │
+   └───────────────────────┘     └───────────────────────┘     └───────────────────────┘
+```
+
+**Expected Strategy Rankings:**
+1. **Mixed Precision** - Best accuracy, moderate complexity
+2. **Per-Channel** - Good accuracy, higher complexity
+3. **Per-Tensor** - Baseline accuracy, simplest implementation
+
+This analysis reveals which strategies work best for different deployment scenarios and accuracy requirements.
+ 
  
