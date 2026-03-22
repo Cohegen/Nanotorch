@@ -1,3 +1,4 @@
+
 import numpy as np
 import time 
 from typing import Tuple,Dict,List,Optional
@@ -394,3 +395,336 @@ def _quantize_single_layer(layer:Linear,calibration_inputs:Optional[List[Tensor]
         quantized_layer.calibrate(calibration_inputs)
 
     return quantized_layer
+
+
+"""
+Model Quantization 
+- Here all the helper functions are compressed into the full model quantization function.
+-For each limear layer in the model, we collect its calibration inputs and replace it with a quatized version
+
+```
+quantize_model() orchestrates the full pipeline:
+
+  For each layer in model.layers:
+      │
+      ├── isinstance(layer, Linear)?
+      │   ├── YES → _collect_layer_inputs()  → calibration activations
+      │   │         _quantize_single_layer()  → QuantizedLinear
+      │   │         Replace model.layers[i]
+      │   │
+      │   └── NO  → Keep unchanged (ReLU, etc.)
+```
+"""
+
+def quantize_model(model,calibration_data:Optional[List[Tensor]]=None) -> None:
+    """
+    Quantized all Liear layers in a model in-place
+
+    Args:
+        model:Model to quantize (with .layers or similar structure)
+        calibration_data:Optional list of sample inputs for calibration
+
+    Returns:
+        None (modifies model in-place)
+
+     EXAMPLE:
+    >>> layer1 = Linear(10, 5)
+    >>> activation = ReLU()
+    >>> layer2 = Linear(5, 2)
+    >>> model = Sequential(layer1, activation, layer2)
+    >>> quantize_model(model)
+    >>> # Now model uses quantized layers
+    """
+
+    if hasattr(model,'layers'):
+        for i, layer in enumerate(model.layers):
+            if isinstance(layer,Linear):
+                #collect calibration inputs if data provided
+                cal_inputs = None
+                if calibration_data is not None:
+                    cal_inputs = __collect_layer_inputs(model,i,calibration_data)
+
+                #replace with quantized version
+                model.layers[i]= _quantize_single_layer(layer,cal_inputs)
+
+    elif isinstance(model,Linear):
+        raise ValueError(
+            f"Cannot quantize single Linear layer in-place\n"
+            f"   quantize_model() modifies model in-place, but a single layer has no container to modify\n"
+            f"    In-place modification requires a container (like Sequential) that holds layer references\n"
+            f"      Use QuantizedLinear directly: quantized_layer = QuantizedLinear(your_linear_layer)"
+        )
+
+    else:
+        raise ValueError(
+            f"Unsupported model type for quantization: {type(model).__name__}\n"
+            f"    quantize_model() expects a model with .layers attribute (like Sequential)\n"
+            f"   The function iterates through model.layers to find and replace Linear layers\n"
+            f"    Wrap your layers in Sequential: model = Sequential(layer1,activation,layer2)"
+
+        )
+
+
+"""
+## Model Size Comparison
+- To compare memory usage between original and quantized models, we need to measure
+bytes at individual layer level first, then aggregate.
+- We follow two steps:
+   1. Measure one layer - counting parameters and bytes for a single layer, handling both FP32 (Linear) and INT8 (QuantizedLinear) layer correctly.
+   2. Aggregate and compare - Sum across all layers and compute compression metrics.
+
+```
+Per-Layer Measurement:
+
+  Layer Type          Measurement Strategy
+  ┌──────────────┐    ┌───────────────────────────────────┐
+  │ Linear       │ →  │ params × 4 bytes (FP32)           │
+  │ QuantizedLin │ →  │ memory_usage() dict (INT8 + ovhd) │
+  │ ReLU/other   │ →  │ 0 params, 0 bytes (no weights)    │
+  └──────────────┘    └───────────────────────────────────┘
+```
+
+"""
+
+"""
+## Measuring a Single Layer
+This heper function measres the parameter count and byte usage for one layer.
+It handles the key distiction: FP32 layers store parameters at 4 bytes each,
+while QuantizedLinear layers use INT8 storage with a small overhead for scale/zero_point metadata.
+
+```
+Byte Accounting per Layer Type:
+
+  FP32 Linear:                     QuantizedLinear:
+  ┌─────────────────────────┐      ┌─────────────────────────────────┐
+  │ weight: N × 4 bytes     │      │ q_weight: N × 1 byte            │
+  │ bias:   M × 4 bytes     │      │ q_bias:   M × 1 byte            │
+  │                         │      │ overhead: ~8 bytes (scale+zp)    │
+  │ Total: (N+M) × 4       │      │ Total: (N+M) × 1 + overhead     │
+  └─────────────────────────┘      └─────────────────────────────────┘
+```
+
+"""
+def _measure_layer_bytes(layer,is_quantized:bool=False)->Tuple[int,int]:
+    """
+    Measures parameter count and byte usage for single layer.
+
+    Args:
+       layer:A single layer (Linear,QuantizedLinear,ReLU)
+       is_quantized: whether to measure as quantized (uses memory_usage() for QuantizedLinear)
+
+    Returns:
+         Tuple of (param_count,byte_count)
+
+    EXAMPLE:
+    >>> linear = Linear(100, 50)
+    >>> params, bytes_ = _measure_layer_bytes(linear)
+    >>> print(f"Params: {params}, Bytes: {bytes_}")
+    Params: 5050, Bytes: 20200
+    """
+
+    if is_quantized and isinstance(layer,QuantizedLinear):
+        memory_info = layer.memory_usage()
+        param_count = sum(p.data.size for p in layer.parameters())
+        return param_count,memory_info['quantized_bytes']
+
+    if hasattr(layer,'parameters'):
+        params = layer.parameters()
+        param_count = sum(p.data.size for p in params)
+        byte_count = param_count * BYTES_PER_FLOAT32
+        return param_count,byte_count
+
+    return 0 , 0
+
+
+def analyze_model_sizes(original_model,quantized_model) -> Dict[str,float]:
+    """
+    This function compares memory usage between original and quantized models.
+
+    Args:
+        original_model:Model before quantization
+        quantized_model:Model after quantization
+
+    Returns:
+         Dictionary with compression metrics
+    
+    >>> layer1 = Linear(100, 50)
+    >>> layer2 = Linear(50, 10)
+    >>> model = Sequential(layer1, layer2)
+    >>> quantize_model(model)
+    >>> stats = analyze_model_sizes(model, model)
+    >>> print(f"Reduced to {stats['compression_ratio']:.1f}x smaller") 
+    
+    """
+    original_params = 0
+    original_bytes = 0
+    for layer in original_model.layers:
+        p,b = _measure_layer_bytes(layer,is_quantized=False)
+        original_params +=p
+        original_bytes += b
+
+
+    #measuring quantized model
+    quantized_params = 0
+    quantized_bytes = 0
+    for layer in quantized_model.layers:
+        is_q = isinstance(layer,QuantizedLinear)
+        p,b = _measure_layer_bytes(layer,is_quantized=is_q)
+        quantized_params += p
+        quantized_bytes += b
+
+    compression_ratio = original_bytes / quantized_bytes if quantized_bytes > 0 else 1.0
+    memory_saved = original_bytes - quantized_bytes
+
+    return {
+        'original_params': original_params,
+        'quantized_params': quantized_params,
+        'original_bytes': original_bytes,
+        'quantized_bytes': quantized_bytes,
+        'compression_ratio': compression_ratio,
+        'memory_saved_mb': memory_saved / MB_TO_BYTES,
+        'memory_saved_percent': (memory_saved / original_bytes) * 100 if original_bytes > 0 else 0
+    }
+
+class Quantizer:
+    """
+    A complete quantization system class
+
+    Provides INTT8 quantization with calibration for 4x memory reduction
+
+    This class delegates to the standalone functions (quantize_int8,dequantize_int8)
+    hence providing a clean OOP interface for experiments
+
+    API that exist here:
+      - Standalone quantize_model(): modifies model in-place
+      - Quantizer.quantize_model(): Returns stats dict (for experiments)
+
+    """
+    @staticmethod
+    def quantize_tensor(tensor:Tensor) ->Tuple[Tensor,float,int]:
+        """
+        Quantizes FP32 tensor to INT8
+        It delegates to quantize_int8()
+        """
+        return quantize_int8(tensor)
+
+    @staticmethod
+    def quantize_tensor(q_tensor:Tensor,scale:float,zero_point:int)->Tensor:
+        """
+        Dequantizes INT8 tensor back to FP32
+        It delegates to dequantize_int8()
+        """
+        return dequantize_int8(q_tensor,scale,zero_point)
+
+    @staticmethod 
+    def quantize_model(model,calibration_data:Optional[List[Tensor]]=None)->Dict[str,any]:
+        """
+        Quantizes all linear layersin model and returns the stats
+
+        Unlike the individula quantize_model() which modifies in-place
+        It returns a dictionary with quantization info for experiments
+
+        Returns:
+            Dict with quantized_layers,original_size_mb,quantized_size_mb,compression_ratio
+        """
+        quantized_layers = {}
+        original_size = 0
+        total_elements = 0
+        param_idx = 0
+
+        #iterates through model parameters
+        for layer in model.layers:
+            for param in layer.parameters():
+                param_size = param.data.nbytes
+                original_size += param_size
+                total_elements += param.data.size
+
+                #quantizing parameters using the individual function
+                q_param,scale,zp = quantize_int8(param)
+
+                quantized_layers[f'param_{param_idx}'] = {
+                    'quantized': q_param,
+                    'scale': scale,
+                    'zero_point': zp,
+                    'original_shape': param.data.shape
+                }
+                param_idx += 1
+
+        #INT8 uses 1byte per element
+        quantized_size = total_elements
+
+        return {
+                 'quantized_layers': quantized_layers,
+            'original_size_mb': original_size / MB_TO_BYTES,
+            'quantized_size_mb': quantized_size / MB_TO_BYTES,
+            'compression_ratio': original_size / quantized_size if quantized_size > 0 else 1.0
+
+            }
+
+    @staticmethod
+    def compare_models(original_model,quantized_info:Dict) ->Dict[str,float]:
+        """
+        Compares memory usage between original and quantized models
+        """
+        return{
+             'original_mb': quantized_info['original_size_mb'],
+            'quantized_mb': quantized_info['quantized_size_mb'],
+            'compression_ratio': quantized_info['compression_ratio'],
+            'memory_saved_mb': quantized_info['original_size_mb'] - quantized_info['quantized_size_mb']
+        }
+    
+
+def verify_quantization_works(original_model,quantized_model):
+    """
+    This function verifies whether quantization actually redces memory using real .nbytes measurements
+
+    Args:
+       original_model:Model with FP32 parameters (Sequential with .parameters())
+       quantized_model:model with INT8 quantized parameters (Sequential with QuantizedLinear layers)
+
+    Retuns:
+         dict:Verification results with actual_reduction,original_mb,quantized_mb
+
+
+     Example:
+        >>> original = Sequential(Linear(100, 50))
+        >>> quantized = Sequential(Linear(100, 50))
+        >>> quantize_model(quantized)
+        >>> results = verify_quantization_works(original, quantized)
+        >>> assert results['actual_reduction'] >= 3.5  # Real 4× reduction
+    """
+
+    #collect actual bytes from original FP32 model
+    original_bytes = sum(
+        param.data.nbytes for param in original_model.parameters()
+        if hasattr(param,'data') and hasattr(param.data,'nbytes')
+
+    )
+
+    #collecting actual bytes from quantized INT8 model
+    quantized_bytes = sum(
+        layer.q_weight.data.nbytes + (layer.q_bias.data.nbytes if layer.q_bias is None else 0)
+        for layer in quantized_model.layers
+        if isinstance(layer,QuantizedLinear)
+    )
+
+    #calculating actual reduction
+    actual_reduction = original_bytes /max(quantized_bytes,1)
+
+    #display results
+    print(f"   Original model: {original_bytes / MB_TO_BYTES:.2f} MB (FP32)")
+    print(f"   Quantized model: {quantized_bytes / MB_TO_BYTES:.2f} MB (INT8)")
+    print(f"   Actual reduction: {actual_reduction:.1f}x")
+    print(f"   {'PASS' if actual_reduction >= 3.5 else 'FAIL'} Meets 4x reduction target")
+
+    #verifying whether target is met
+    assert actual_reduction >= 3.5, f"Expected ~4x reduction, got {actual_reduction:.1f}x"
+
+    print(f"\nVERIFIED: Quantization achieves real {actual_reduction:.1f}x memory reduction!")
+
+    return {
+        'actual_reduction': actual_reduction,
+        'original_mb': original_bytes / MB_TO_BYTES,
+        'quantized_mb': quantized_bytes / MB_TO_BYTES,
+        'verified': actual_reduction >= 3.5
+    }
