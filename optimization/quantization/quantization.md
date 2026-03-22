@@ -149,6 +149,7 @@ Take FP32 values `[-1.5, 0.2, 2.8]` (same spirit as the diagrams earlier).
 You should see codes clustered across the range; dequantizing with `(q - z) * s` gives back numbers **close to** the originals, not always exact.
 
 ---
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/quantization_process.webp)
 
 ## Step 7 — Quantization error (what the learner should expect)
 
@@ -159,6 +160,7 @@ Restored FP32:     e.g. 0.728
        ↓
 Small error:       |0.73 - 0.728| is quantization noise
 ```
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/quantization_error_calculation.webp)
 
 **Trade-off:**
 
