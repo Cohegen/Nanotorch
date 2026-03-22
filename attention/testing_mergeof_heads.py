@@ -11,7 +11,8 @@ import math
 
 def testing_unit_merge_heads():
     """
-    This function tests merging reshape
+    This function tests merging reshape where why try to reshape 4D to 3D correclty to recombine
+    heads to form embeddingd
     """
     mha = MultiHeadAttention(embed_dim=64,num_heads=8)
 

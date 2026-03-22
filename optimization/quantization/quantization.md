@@ -1,461 +1,307 @@
-# Introduction To Quantization Module
+# Introduction to the Quantization Module
+
+This document walks through quantization **in order**: from *why* it exists, to the *math*, to *tensor* → *layer* → *full model* behavior, and finally to *production-style* variants. Read top to bottom once for a full picture, or jump using the roadmap below.
+
+## How to read this guide (step-by-step path)
+
+1. **Motivation** — memory pressure and what quantization buys you.
+2. **Vocabulary** — scale, zero point, INT8 range, quantization error.
+3. **One tensor, end-to-end** — compute scale and zero point, quantize, dequantize (matches `quantize_int8` / `dequantize_int8` in `quantization.py`).
+4. **QuantizedLinear** — what happens when you wrap a `Linear` layer.
+5. **Calibration** — how sample inputs set **input** quantization parameters (stored for analysis; the educational forward pass still matmuls in FP32).
+6. **Whole models** — replacing linears while keeping activations as-is.
+7. **Beyond the baseline** — per-channel and mixed precision (concepts).
+
+---
 
 ## Prerequisites
-- This modules assumes you have gone through the following modules:
-    - Tensor
-    - Activations
-    - Layers
-    - Prolifing
-    - Quantization
 
-## Definition of Quantization
-- Generally quantization is the process of mapping a large (often continuous) set of values into a saller set of discrete values.
-- Meaning the we reduce precision to save space or computation.
+This module assumes you have already worked through:
 
-### Memory Wall Problem
-- Imagine your are trying to fit a library into your bag.
-- Neural network face the same challenges whereby model become so huge to a point its impossible to store them in devices this is because devices have limited memory.
-- This is where **Quantization** comes in.
+- **Tensor** — shapes, dtypes, element-wise ops.
+- **Activations** — nonlinearities (no weights to quantize).
+- **Layers** — especially `Linear` and how `forward` uses weights and bias.
+- **Profiling** — measuring memory and time (helps interpret compression gains).
 
-### The Precision Paradox
-- Modern neural networks use 32-bit floating point numbers (FP32) with incredible precision:
+---
 
-```
-FP32 Number: 3.14159265359...
-             ^^^^^^^^^^^^^^^^
-             32 bits = 4 bytes per weight
-```
-- But here's the thing we do not neeed all that precision for most AI task.
+## Step 1 — What quantization is
 
-### The Growing Memory Crisis
+Quantization maps values from a **large** set (often many possible FP32 numbers) to a **small discrete** set (for example 256 INT8 levels). You **reduce precision** to save **memory** and often **compute**.
+
+Neural networks can outgrow device RAM (the “memory wall”). If each weight uses 32 bits, a large model is measured in gigabytes; using 8 bits per weight cuts storage for weights by about **4×** (plus small overhead for scale/zero-point metadata).
+
+**Precision vs need:** FP32 has far more precision than most inference tasks require. INT8 is a common “sweet spot”: large memory savings with modest accuracy impact when scales are chosen well.
+
+---
+
+## Step 2 — The growing memory picture (illustrative)
 
 ```
-Model Memory Requirements (FP32):
+Model Memory Requirements (FP32 weights, rough order of magnitude):
 ┌─────────────────────────────────────────────────────────────┐
-│ BERT-Base:   110M params ×  4 bytes = 440MB                 │
-│ GPT-2:       1.5B params ×  4 bytes = 6GB                   │
-│ GPT-3:       175B params × 4 bytes = 700GB                  │
-│ Your Phone:  Available RAM = 4-8GB                          │
+│ BERT-Base:   110M params × 4 bytes ≈ hundreds of MB       │
+│ Large LMs:   billions of params × 4 bytes → many GB       │
+│ Your phone:  on the order of a few GB RAM total             │
 └─────────────────────────────────────────────────────────────┘
-                        ↑
-                    Problem!
 ```
 
-### The Quantization Solution
-- What is there was a strategy we could use to represent each weight with 8 bits instead of 32?
+Quantization is one lever to shrink **stored weights** (and, in full stacks, activations) so models fit and load faster.
+
+---
+
+## Step 3 — The core idea in one diagram
 
 ```
-Before Quantization (FP32):
-┌───────────────────────────────┐
-│  3.14159265   │  2.71828183   │  32 bits each
-└───────────────────────────────┘
-
-After Quantization (INT8):
-┌────────┬────────┬────────┬────────┐
-│   98   │   85   │   72   │   45   │  8 bits each
-└────────┴────────┴────────┴────────┘
-         ↑
-    4× less memory!
+Before (FP32):     each weight ≈ 32 bits
+After (INT8):      each stored weight ≈ 8 bits  →  ~4× smaller weight storage
 ```
 
-### Real-World Impact of achieved because of Quantization.
+**Typical benefits (when done well):**
 
-**Memory Reduction:**
-- BERT-Base: 440MB → 110MB (4× smaller)
-- Fits on mobile devices!
-- Faster loading from disk
-- More models in GPU memory
+- **Memory:** fewer bytes for weights; more models or batch size in RAM.
+- **Speed:** hardware-dependent; INT8 paths can be faster when available.
+- **Accuracy:** often within a small margin of FP32 with good calibration and schemes.
 
-**Speed Improvements:**
-- 2-4× faster inference (hardware dependent)
-- Lower power consumption
-- Better user experience
+---
 
-**Accuracy Preservation:**
-- <1% accuracy loss with proper techniques
-- Sometimes even improves generalization!
+## Step 4 — Mapping FP32 → INT8 (the vocabulary)
 
-**Why This Matters:**
-- **Mobile AI:** Deploy powerful models on phones
-- **Edge Computing:** Run AI without cloud connectivity
-- **Data Centers:** Serve more users with same hardware
-- **Environmental:** Reduce energy consumption by 2-4×
-
-
-## Fundementals (The Mathematics of Compression)
-
-### Understanding the Core Challenge
-- Think of quantization like converting a smooth analog signal to digital steps.
-- Here in our scenario we need to map infinite precision (FP32) to just 256 possible values (INT8).
-
-### The Quantization Mapping
+Think of quantization like **analog → digital**: infinitely many FP32 values must land on **256** signed INT8 codes (`-128` … `127`).
 
 ```
-The Fundamental Problem:
-
-FP32 Numbers (Continuous):        INT8 Numbers (Discrete):
-    ∞ possible values         →      256 possible values
-
-  ...  -1.7  -1.2  -0.3  0.0  0.8  1.5  2.1  ...
-         ↓     ↓     ↓    ↓    ↓    ↓    ↓
-      -128  -95   -38    0   25   48   67   127
+FP32 (continuous)              INT8 (256 levels)
+  ... -1.2  0.0  0.8 ...   →   ... -95   0   25 ...
 ```
 
-### The formula
-- Every quantization system uses this fundemental relationship:
+Two numbers **fully describe** the affine mapping used in this project:
+
+| Term | Role |
+|------|------|
+| **Scale** `s` | How much FP32 value each step between INT8 levels represents. |
+| **Zero point** `z` | Which INT8 code corresponds to FP32 `0` (after rounding). |
+
+**Dequantization** (INT8 → approximate FP32) is always:
 
 ```
-Quantization (FP32 → INT8):
-┌─────────────────────────────────────────────────────────┐
-│  quantized = round((float_value - zero_point) / scale)  │
-└─────────────────────────────────────────────────────────┘
-
-Dequantization (INT8 → FP32):
-┌─────────────────────────────────────────────────────────┐
-│  float_value = (quantized - zero_point) × scale         │
-└─────────────────────────────────────────────────────────┘
+x_approx = (q - z) × s
 ```
 
-### The Two Ciritical Parameters
+where `q` is the stored INT8 (used as a real number for the formula).
 
-**1. Scale(s)**- how big each INT8 step is in FP32 space:
-```
-Small Scale (high precision):       Large Scale (low precision):
- FP32: [0.0, 0.255]                 FP32: [0.0, 25.5]
-   ↓     ↓     ↓                       ↓     ↓     ↓
- INT8:  0    128   255              INT8:  0    128   255
-        │     │     │                      │     │     │
-      0.0   0.127  0.255                 0.0   12.75  25.5
-
- Scale = 0.001 (very precise)        Scale = 0.1 (less precise)
-```
-
-**2. Zero Point (z)** - which INT8 value represents FP32 zero:
+**Quantization** (FP32 → INT8) is the nearest-integer assignment consistent with that relationship. In **this codebase** the forward quantization is implemented as:
 
 ```
-Symmetric Range:                    Asymmetric Range:
- FP32: [-2.0, 2.0]                  FP32: [-1.0, 3.0]
-   ↓     ↓     ↓                       ↓     ↓     ↓
- INT8: -128    0   127              INT8: -128  -64   127
-        │     │     │                      │     │     │
-     -2.0    0.0   2.0                  -1.0   0.0   3.0
-
- Zero Point = 0                     Zero Point = -64
+q = round( x / s + z )
 ```
 
-### Quantization Error Analysis
-```
-Perfect Reconstruction (Impossible):  Quantized Reconstruction (Reality):
+then `q` is **clipped** to `[-128, 127]` and stored as `int8`. (Algebraically this pairs with `x ≈ (q - z) × s`.)
 
-Original: 0.73                       Original: 0.73
-    ↓                                     ↓
-INT8: ? (can't represent exactly)     INT8: 93 (closest)
-    ↓                                     ↓
-Restored: 0.73                        Restored: 0.728
-                                           ↑
-                                    Error: 0.002
-```
+Some textbooks write an equivalent form with `(x - offset) / s`; the **pairing** of encode/decode matters. When reading `quantization.py`, use the formulas above.
 
-**The Quantization Trade-off**
-- **More bits** = higher precision,large memory
-- **Fewer bits** = lower precision, smaller memory
-- **Goal:** - find thw sweet spot where error is acceptable
+---
 
-### Why INT8 is the Sweet Spot
+## Step 5 — How `scale` and `zero_point` are computed (per tensor)
 
-```
-Precision vs Memory Trade-offs:
+For a **single FP32 tensor**, the engine looks at **min** and **max** over all elements:
 
-FP32: ████████████████████████████████ (32 bits) - Overkill precision
-FP16: ████████████████ (16 bits)                  - Good precision
-INT8: ████████ (8 bits)                           - Sufficient precision ← Sweet spot!
-INT4: ████ (4 bits)                               - Often too little
+1. **Range:** `r = max_val - min_val`.
+2. **Edge case:** If the tensor is (almost) constant, the code uses `s = 1`, `z = 0`, and all quantized values `0`.
+3. **Otherwise:**
+   - `s = r / 255` — the FP32 span of one step between adjacent INT8 levels (255 steps from min code to max code in the unsigned span of indices; here the codes span `-128…127`).
+   - `z = round(-128 - min_val / s)`, then **clamp** `z` into `[-128, 127]`.
+4. **Apply:** `q = round(x / s + z)`, then clip to INT8 range.
 
-Memory:    100%    50%    25%    12.5%
-Accuracy:  100%   99.9%  99.5%   95%
-```
+Constants in code: `INT8_MIN_VALUE = -128`, `INT8_MAX_VALUE = 127`, `INT8_RANGE = 256`.
 
-- INT8 gives us 4x memory reduction with <1% accuracy loss, the perfect balance for production systems.
+**Intuition:**
 
-## Implementation of a Quantization Engine
-- Details about the implementation of the Quantization Engine are available in **quantization.py**.
+- **`s`** stretches or shrinks FP32 so the observed `[min, max]` maps into the available INT8 codes.
+- **`z`** shifts the mapping so that **zero in FP32** lands near a valid INT8 index (as closely as rounding allows).
 
-## INT8 Quantization - The Foundation
-- This is the core function that converts any FP32 tensor to INT8.
-- We can think of it as a smart compression algorithm that preserves the most important information.
+---
 
-```
-Quantization Process Visualization:
+## Step 6 — Walkthrough: one small tensor
 
-Step 1: Analyze Range              Step 2: Calculate Parameters       Step 3: Apply Formula
-┌─────────────────────────┐    ┌─────────────────────────┐  ┌─────────────────────────┐
-│ Input: [-1.5, 0.2, 2.8] │    │ Min: -1.5               │  │ quantized = round(      │
-│                         │    │ Max: 2.8                │  │   value / scale + zp)   │
-│ Find min/max values     │ →  │ Range: 4.3              │ →│                         │
-│                         │    │ Scale: 4.3/255 = 0.017  │  │                         │
-│                         │    │ Zero Point: -39         │  │ Result: [-128,-27, 127] │
-└─────────────────────────┘    └─────────────────────────┘  └─────────────────────────┘
-```
+Take FP32 values `[-1.5, 0.2, 2.8]` (same spirit as the diagrams earlier).
 
-**Key Challenges This Function Solves:**
-- **Dynamic Range:** Each tensor has different min/max values
-- **Precision Loss:** Map 4 billion FP32 values to just 256 INT8 values
-- **Zero Preservation:** Ensure FP32 zero maps exactly to an INT8 value
-- **Symmetric Mapping:** Distribute quantization levels efficiently
+**6.1 — Observe range**
 
-**Why This Algorithm:**
-- **Linear mapping** preserves relative relationships between values
-- **Symmetric quantization** works well for most neural network weights
-- **Clipping to [-128, 127]** ensures valid INT8 range
-- **Round-to-nearest** minimizes quantization error
+- `min_val = -1.5`, `max_val = 2.8`, `r = 4.3`.
 
+**6.2 — Scale**
 
-## INT8 Dequantization (Restoring Precision)
-- Dequantization is the inverse process, i.e converting compressed INT8 values back to usable FP32.
-- This is where "decompress" our quantized data.
+- `s = 4.3 / 255 ≈ 0.01686`.
+
+**6.3 — Zero point**
+
+- `z = round(-128 - (-1.5) / s) = round(-128 + 88.88…) ≈ -39` (then clamp if needed; `-39` is in range).
+
+**6.4 — Quantize each value**
+
+- `q_i = round(x_i / s + z)`; clip to `[-128, 127]`.
+
+You should see codes clustered across the range; dequantizing with `(q - z) * s` gives back numbers **close to** the originals, not always exact.
+
+---
+
+## Step 7 — Quantization error (what the learner should expect)
 
 ```
-Dequantization Process:
-
-INT8 Values + Parameters → FP32 Reconstruction
-
-┌───────────────────────────────────┐
-│ Quantized: [-128, -27, 127]       │
-│ Scale: 0.017                      │
-│ Zero Point: -39                   │
-└───────────────────────────────────┘
-                 │
-                 ▼ Apply Formula
-┌───────────────────────────────────┐
-│ FP32 = (quantized - zero_point)   │
-│        × scale                    │
-└───────────────────────────────────┘
-                 │
-                 ▼
-┌───────────────────────────────────┐
-│ Result: [-1.501, 0.202, 2.799]    │
-│ Original: [-1.5, 0.2, 2.8]        │
-│ Error: [0.001, 0.002, 0.001]      │
-└───────────────────────────────────┘
+Original FP32:     0.73
+       ↓ round-trip through INT8 with fixed (s, z)
+Restored FP32:     e.g. 0.728
+       ↓
+Small error:       |0.73 - 0.728| is quantization noise
 ```
 
-**Why This Step Is Critical:**
-- **Neural networks expect FP32** - INT8 values would confuse computations
-- **Preserves computation compatibility** - works with existing matrix operations
-- **Controlled precision loss** - error is bounded and predictable
-- **Hardware flexibility** - can use FP32 or specialized INT8 operations
+**Trade-off:**
 
-**When Dequantization Happens:**
-- **During forward pass** - before matrix multiplications
-- **For gradient computation** - during backward pass
-- **Educational approach** - production uses INT8 GEMM directly
-"""
+- More bits → higher fidelity, more memory.
+- Fewer bits → more noise, less memory.
 
-## QuantizedLinear 
+The goal is an acceptable error on **downstream metrics** (accuracy, perplexity), not zero per-weight error.
 
-### Why we Need Quantized Layers
-- A quantized model isn't just storing weights in INT8, we need layers that can work  efficiently with quantized data.
+---
+
+## Step 8 — Dequantization only (restore approximate FP32)
+
+Given stored `q`, `s`, and `z`:
 
 ```
-Regular Linear Layer:              QuantizedLinear Layer:
-
-┌─────────────────────┐            ┌─────────────────────┐
-│ Input: FP32         │            │ Input: FP32         │
-│ Weights: FP32       │            │ Weights: INT8       │
-│ Computation: FP32   │    VS      │ Computation: Mixed  │
-│ Output: FP32        │            │ Output: FP32        │
-│ Memory: 4× more     │            │ Memory: 4× less     │
-└─────────────────────┘            └─────────────────────┘
+x_approx = (q - z) × s
 ```
 
-### The Quantized Forward Pass
+**Why it matters here:** The educational `QuantizedLinear` **dequantizes weights (and bias) to FP32** before `matmul`, so the rest of the stack still looks like a normal floating-point layer from the outside.
+
+**Production contrast:** Many deployed stacks fuse **INT8 matrix multiply** with scales to avoid explicit FP32 weights; memory savings are similar, but kernels and numerics are more involved.
+
+---
+
+## Step 9 — From tensors to layers: `QuantizedLinear`
+
+### 9.1 — Why a special layer?
+
+Storing weights as INT8 is not enough—you need code that **loads INT8**, **reconstructs or uses** them in multiply-accumulate, and keeps the **same interface** as `Linear` for the rest of the model.
+
+### 9.2 — What happens at construction (one-time)
+
+When you build `QuantizedLinear` from a `Linear` layer (`quantization.py`):
+
+1. Run `quantize_int8` on **weights** → `q_weight`, `weight_scale`, `weight_zero_point`.
+2. If bias exists, run `quantize_int8` on **bias** → `q_bias`, `bias_scale`, `bias_zero_point`.
+3. Initialize `input_scale` / `input_zero_point` to `None` until calibration.
+
+### 9.3 — What happens on `forward` (each call)
+
+1. `weight_fp32 = dequantize_int8(q_weight, weight_scale, weight_zero_point)`.
+2. `result = x.matmul(weight_fp32)` with **FP32 activations** `x`.
+3. If bias exists: dequantize bias and add.
+
+So: **weights compressed in memory**, **compute path uses FP32** in this tutorial implementation.
 
 ```
-Quantized Linear Layer Forward Pass:
-
-    Input (FP32)                  Quantized Weights (INT8)
-         │                               │
-         ▼                               ▼
-┌─────────────────┐              ┌─────────────────┐
-│    Calibrate    │              │   Dequantize    │
-│   (optional)    │              │   Weights       │
-└─────────────────┘              └─────────────────┘
-         │                               │
-         ▼                               ▼
-    Input (FP32)                  Weights (FP32)
-         │                               │
-         └───────────────┬───────────────┘
-                         ▼
-                ┌─────────────────┐
-                │ Matrix Multiply │
-                │   (FP32 GEMM)   │
-                └─────────────────┘
-                         │
-                         ▼
-                   Output (FP32)
-
-Memory Saved: 4× for weights storage!
-Speed: Depends on dequantization overhead vs INT8 GEMM support
+Input x (FP32)     q_weight (INT8) + (s_w, z_w)
+      │                      │
+      │                      ▼
+      │            dequantize → weight_fp32
+      │                      │
+      └────────── matmul ────┘
+                  │
+                  ▼
+            output (FP32)  [+ dequantized bias if any]
 ```
 
-### Calibration (Finding Optimal Input Quantization)
+---
+
+## Step 10 — Calibration (input statistics)
+
+**Purpose:** Run **representative inputs** through the layer (or model) and record how activations behave so you can choose good **input** scales and zero points—**if** you quantize activations or analyze sensitivity.
+
+In this module, `calibrate(sample_inputs)`:
+
+1. Flattens all sample tensors and finds **global min/max** over those values.
+2. Computes `input_scale` and `input_zero_point` with the **same recipe** as weight quantization (constant-tensor guard included).
+
+**Important for readers of the current code:** `forward` does **not** quantize `x` using `input_scale` / `input_zero_point`; it only uses **dequantized weights**. Calibration still teaches the **pipeline** used in fuller systems and matches how input parameters *would* be set.
 
 ```
-Calibration Process:
-
- Step 1: Collect Sample Inputs    Step 2: Analyze Distribution    Step 3: Optimize Parameters
- ┌─────────────────────────┐      ┌─────────────────────────┐    ┌─────────────────────────┐
- │ input_1: [-0.5, 0.2, ..]│      │   Min: -0.8             │    │ Scale: 0.00627          │
- │ input_2: [-0.3, 0.8, ..]│  →   │   Max: +0.8             │ →  │ Zero Point: 0           │
- │ input_3: [-0.1, 0.5, ..]│      │   Range: 1.6            │    │ Optimal for this data   │
- │ ...                     │      │   Distribution: Normal  │    │ range and distribution  │
- └─────────────────────────┘      └─────────────────────────┘    └─────────────────────────┘
+Collect many input tensors  →  min/max over all seen values  →  (input_scale, input_zero_point)
 ```
 
-**Why Calibration Matters:**
-- **Without calibration:** Generic quantization parameters may waste precision
-- **With calibration:** Parameters optimized for actual data distribution
-- **Result:** Better accuracy preservation with same memory savings
+---
 
-## QuantizedLinear Class 
-- This class replaces regular Linear layers with quantized version that use 4x less memory while preserving functionality.
+## Step 11 — Scaling to a full network
 
-```
-QuantizedLinear Architecture:
+### 11.1 — The challenge
 
-Creation Time:                       Runtime:
-┌───────────────────────────────┐    ┌───────────────────────────────┐
-│ Regular Linear Layer          │    │ Input (FP32)                  │
-│ ↓                             │    │ ↓                             │
-│ Quantize weights → INT8       │    │ Optional: quantize input      │
-│ Quantize bias → INT8          │ →  │ ↓                             │
-│ Store quantization params     │    │ Dequantize weights            │
-│ Ready for deployment!         │    │ ↓                             │
-└───────────────────────────────┘    │ Matrix multiply (FP32)        │
-      One-time cost                  │ ↓                             │
-                                     │ Output (FP32)                 │
-                                     └───────────────────────────────┘
-                                        Per-inference cost
-```
+Real models stack many layers. You want **consistent replacement**: e.g. each `Linear` → `QuantizedLinear`, while **ReLU** (no parameters) stays unchanged.
 
-**Key Design Decisions:**
+### 11.2 — Layer selection
 
-1. **Store original layer reference** - for debugging and comparison
-2. **Separate quantization parameters** - weights and bias may need different scales
-3. **Calibration support** - optimize input quantization using real data
-4. **FP32 computation** - educational approach, production uses INT8 GEMM
-5. **Memory tracking** - measure actual compression achieved
+- **Big wins:** `Linear` / conv layers with large weight tensors.
+- **No weight tensors:** activations, dropout, etc.—nothing to quantize as “weights.”
+- **Sensitivity:** first/last layers are sometimes kept in FP32 in production **mixed-precision** policies (concept below).
 
-**Memory Layout:**
-- Regular Linear layers store weights in FP32 (4 bytes each), while QuantizedLinear stores them in INT8 (1 byte each) plus a small overhead for quantization parameters (scales and zero points).
-- This achieve approximately 4x memory reduction with minimal overhead.
+### 11.3 — Calibration data flow (model-wide idea)
 
-**Production vs Educational Trade-off**
-- **Our approach:** Dequantize -> FP32 computation
-- **Production:** INT8 GEMM operations (faster,more complex)
-- **Both achieve:** same memory saving, similar accuracy.
+For each quantized layer, you may pass calibration data through **all preceding layers** so the inputs to that layer reflect real activation ranges—then set per-layer input quantization parameters. That mirrors how deployment tools build histograms or min/max stats per tensor.
 
-## Scaling to Full Neural Netwoes
+### 11.4 — Memory impact
 
-### The Model Quantization Challenge
-- Quantizing individual tensors is useful, but real applications need to quantize entire neural networks with multiple layers, activations and complex data flows.
-- The key is replacing standard layers (like Linear) with quantized equivalent (QuantizedLinear) while keeping activation functions unchanged since they have no parameters.
+Weight storage drops by about **4×** for INT8 vs FP32, plus small overhead for scales/zero points. Total model size also includes non-quantized pieces (e.g. batch norm buffers if any, or FP32 layers you chose not to quantize).
 
-### Smart Layer Selection 
-- Not all layers benefit equally from quantization.
-- Linear and convolutional layers with many parameters see the largest benefits, while activation functions (which have no parameters) cannot be quantized.
-- Some layers like input/output projection may be sensitve to quantization and should be kept in higher precision for critical application. 
+---
 
-### Calibration Data Flow
-- Calibration runs sample data through the model layer-by-layer,  collecting activation statistics (min/max values, distributions) determine optimal quantization parameters for each layer, ensuring minimal accuracy loss during quantization.
+## Step 12 — Advanced strategies (production landscape)
 
-### Memory Impact
-- Quantization provides  consistent 4x memory reduction across all model sizes.
-- The actual impact depends on model architecture, but the compression ratio remains constant since we're reducing precision from 32 bits to 8 bits per parameter.
-
-##  Advanced Quantization Strategies - Production Techniques
-
-This analysis compares different quantization approaches used in production systems, revealing the trade-offs between accuracy, complexity, and performance.
+Three common patterns (your implementation is **per-tensor** for each weight/bias tensor):
 
 ```
-Strategy Comparison Framework:
-
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│                          Three Advanced Strategies                             │
-├──────────────────────────┬──────────────────────────┬──────────────────────────┤
-│       Strategy 1         │       Strategy 2         │       Strategy 3         │
-│    Per-Tensor (Ours)     │    Per-Channel Scale     │    Mixed Precision       │
-├──────────────────────────┼──────────────────────────┼──────────────────────────┤
-│                          │                          │                          │
-│ ┌──────────────────────┐ │ ┌──────────────────────┐ │ ┌──────────────────────┐ │
-│ │ Weights:             │ │ │ Channel 1: scale₁   │ │ │ Sensitive: FP32      │ │
-│ │ [W₁₁ W₁₂ W₁₃]        │ │ │ Channel 2: scale₂   │ │ │ Regular: INT8        │ │
-│ │ [W₂₁ W₂₂ W₂₃] scale  │ │ │ Channel 3: scale₃   │ │ │                      │ │
-│ │ [W₃₁ W₃₂ W₃₃]        │ │ │                      │ │ │ Input: FP32          │ │
-│ └──────────────────────┘ │ │ Better precision     │ │ │ Output: FP32         │ │
-│                          │ │ per channel          │ │ │ Hidden: INT8         │ │
-│ Simple, fast             │ └──────────────────────┘ │ └──────────────────────┘ │
-│ Good baseline            │                          │                          │
-│                          │ More complex             │ Optimal accuracy         │
-│                          │ Better accuracy          │ Selective compression    │
-└──────────────────────────┴──────────────────────────┴──────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────┐
+│ Strategy 1: Per-tensor (this repo)                                         │
+│   One (s, z) for the entire weight matrix — simple, fast baseline.         │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Strategy 2: Per-channel                                                  │
+│   Separate scales (often per output channel) — better fit, more metadata.  │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Strategy 3: Mixed precision                                               │
+│   Keep sensitive layers in FP32, quantize the bulk — strong accuracy/cost. │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Strategy 1: Per-Tensor Quantization (Our Implementation)**
-```
-Weight Matrix:                Scale Calculation:
-┌─────────────────────────┐     ┌─────────────────────────┐
-│ 0.1 -0.3  0.8  0.2      │     │ Global min: -0.5        │
-│-0.2  0.5 -0.1  0.7      │ →   │ Global max: +0.8        │
-│ 0.4 -0.5  0.3 -0.4      │     │ Scale: 1.3/255 = 0.0051 │
-└─────────────────────────┘     └─────────────────────────┘
+**Per-tensor (ours):** one global min/max over the whole tensor → one scale/zero point.
 
-Pros: Simple, fast           Cons: May waste precision
-```
+**Per-channel:** min/max along each channel (e.g. each column of a weight matrix) → many scales; often better SNR for conv/linear weights.
 
-**Strategy 2: Per-Channel Quantization (Advanced)**
-```
-Weight Matrix:                Scale Calculation:
-┌─────────────────────────┐     ┌─────────────────────────┐
-│ 0.1 -0.3  0.8  0.2      │     │ Col 1: [-0.2,0.4] → s₁  │
-│-0.2  0.5 -0.1  0.7      │ →   │ Col 2: [-0.5,0.5] → s₂  │
-│ 0.4 -0.5  0.3 -0.4      │     │ Col 3: [-0.1,0.8] → s₃  │
-└─────────────────────────┘     │ Col 4: [-0.4,0.7] → s₄  │
-                             └─────────────────────────┘
+**Mixed precision:** quantize only part of the graph; typical for attention projections or heads in transformers.
 
-Pros: Better precision       Cons: More complex
-```
+**Rough expectation:** mixed precision and per-channel often beat pure per-tensor on accuracy, at the cost of complexity and extra storage for scales.
 
-**Strategy 3: Mixed Precision (Production)**
-```
-Model Architecture:            Precision Assignment:
-┌─────────────────────────┐     ┌─────────────────────────┐
-│ Input Layer  (sensitive) │     │ Keep in FP32 (precision) │
-│ Hidden 1     (bulk)     │ →   │ Quantize to INT8        │
-│ Hidden 2     (bulk)     │     │ Quantize to INT8        │
-│ Output Layer (sensitive)│     │ Keep in FP32 (quality)   │
-└─────────────────────────┘     └─────────────────────────┘
+---
 
-Pros: Optimal trade-off      Cons: Requires expertise
+## Step 13 — Where to look in code
+
+| Step in this guide | Primary code |
+|--------------------|--------------|
+| Tensor quantize/dequantize | `quantize_int8`, `dequantize_int8` |
+| Layer | `QuantizedLinear` |
+| Full model | `quantize_model` and helpers in `quantization.py` |
+
+Reading this file **together** with `quantization.py` ties the narrative steps to function names and tensor dtypes (`int8` weights after quantization).
+
+---
+
+## Quick reference card
+
+```
+INT8 codes:  -128 … 127
+
+Dequantize:  x ≈ (q - z) × s
+
+Quantize (as implemented):  q = clip( round(x / s + z), -128, 127 )
+
+Per tensor:  s from (max - min) / 255, z from -128 - min/s (clamped)
 ```
 
-**Experimental Design:**
-```
-Comparative Testing Protocol:
-
-1. Create identical test model   →  2. Apply each strategy        →  3. Measure results
-   ┌───────────────────────┐     ┌───────────────────────┐     ┌───────────────────────┐
-   │ 128 → 64 → 10 MLP      │     │ Per-tensor quantization │     │ MSE error calculation  │
-   │ Identical weights       │     │ Per-channel simulation  │     │ Compression measurement│
-   │ Same test input         │     │ Mixed precision setup   │     │ Speed comparison       │
-   └───────────────────────┘     └───────────────────────┘     └───────────────────────┘
-```
-
-**Expected Strategy Rankings:**
-1. **Mixed Precision** - Best accuracy, moderate complexity
-2. **Per-Channel** - Good accuracy, higher complexity
-3. **Per-Tensor** - Baseline accuracy, simplest implementation
-
-This analysis reveals which strategies work best for different deployment scenarios and accuracy requirements.
- 
- 
+This closes the loop: you now have an ordered path from **problem** → **math** → **tensor** → **layer** → **model** → **stronger industrial variants**.
