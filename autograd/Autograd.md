@@ -1,4 +1,4 @@
-## Autograd (Automatic Differentiation) in nano-torch
+## Autograd (Automatic Differentiation) in NanoTorch
 
 ### Why autograd exists (background)
 Training a neural network uses gradient descent:
