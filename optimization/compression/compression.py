@@ -134,3 +134,127 @@ def structured_prune(model,prune_ratio=0.5):
                 
     return model
 
+def low_rank_approximate(weight_matrix,rank_ratio=0.5):
+    """
+    Approximates weight matrix using low-rank decompisition (SVD)
+
+    EXAMPLE:
+    >>> weight = np.random.randn(100, 50)
+    >>> U, S, V = low_rank_approximate(weight, rank_ratio=0.3)
+    >>> # Original: 100*50 = 5000 params
+    >>> # Compressed: 100*15 + 15*50 = 2250 params (55% reduction)
+
+    """
+    m,n =weight_matrix.shape
+
+    #perform SVD
+    U,S,V = np.linalg.svd(weight_matrix,full_matrices=False)
+
+    #determining target rank
+    max_rank = min(m,n)
+    target_rank = max(1,int(rank_ratio*max_rank))
+
+    #truncating to target rank
+    U_truncated = U[:,:target_rank]
+    S_truncated = S[:target_rank]
+    V_truncated = V[:target_rank,:]
+
+    return U_truncated,S_truncated, V_truncated
+
+
+class KnowledgeDistillation:
+    """
+    Knowledge distillation for model compression.
+
+    Trains a smaller student model to mimic a larger teacher model.
+    """
+
+    def __init__(self,teacher_model,student_model,temperature=3.0,alpha=0.7):
+        """
+        Initializes knowledge distillation.
+
+
+        Args:
+           teacher_model:Large,pre-trained model
+           student_model: smaller model to train
+           temperature: softening parameter for distributions
+           alpha:weight for soft target loss (1-alpha for hard targets)
+
+         EXAMPLE:
+        >>> # Create teacher with more capacity (explicit layers)
+        >>> teacher_l1 = Linear(100, 200)
+        >>> teacher_l2 = Linear(200, 50)
+        >>> teacher = Sequential(teacher_l1, teacher_l2)
+        >>>
+        >>> # Create smaller student (explicit layer)
+        >>> student = Sequential(Linear(100, 50))
+        >>>
+        >>> kd = KnowledgeDistillation(teacher, student, temperature=4.0, alpha=0.8)
+        >>> print(f"Temperature: {kd.temperature}, Alpha: {kd.alpha}")
+        Temperature: 4.0, Alpha: 0.8
+        """
+        self.teacher_model = teacher_model
+        self.student_model = student_model
+        self.temperature = temperature
+        self.alpha = alpha
+        
+
+    def distillation_loss(self,student_logits,teacher_logits,true_labels):
+            """
+            Calculates combined distillation loss.
+
+             EXAMPLE:
+        >>> kd = KnowledgeDistillation(teacher, student)
+        >>> loss = kd.distillation_loss(student_out, teacher_out, labels)
+        >>> print(f"Distillation loss: {loss:.4f}")
+
+            """
+            #extracting numpy array from Tensors
+            #student_logits and teacher_logits are always Tensor from forward passes
+            student_logits = student_logits.data 
+            teacher_logits = teacher_logits.data 
+
+            #true_labels might be numpy array or Tensor 
+            if isinstance(true_labels,Tensor):
+                true_labels= true_labels.data 
+
+            #soften distributions with temperature 
+            student_soft = self._softmax(student_logits / self.temperature)
+            teacher_soft = self._softmax(teacher_logits / self.temperature)
+
+            #soft target loss(KL divergence)
+            # KL divergence must be computed over probability distributions.
+            soft_loss = self._kl_divergence(student_soft, teacher_soft)
+
+            #hard target loss (cross-entropy)
+            student_hard = self._softmax(student_logits)
+            hard_loss =self._cross_entropy(student_hard,true_labels)
+
+            #combined loss
+            total_loss = self.alpha * soft_loss + (1-self.alpha) * hard_loss
+
+            return total_loss 
+
+    def _softmax(self,logits):
+        """
+        computes softmax with numerical stability
+        """
+        exp_logits = np.exp(logits - np.max(logits,axis=-1,keepdims=True))
+        return exp_logits / np.sum(exp_logits,axis=-1,keepdims=True)
+
+
+    def _kl_divergence(self,p,q):
+        """
+        Computes KL divergence between distributions.
+        """
+        return np.sum(p*np.log(p/(q+1e-8) + 1e-8))
+
+    def _cross_entropy(self,predictions,labels):
+        """
+        Computes cross-entropy loss.
+        """
+        #simple implementation for integer labels
+        if labels.ndim == 1:
+            return -np.mean(np.log(predictions[np.arange(len(labels)),labels]+ 1e-8))
+        else:
+            return -np.mean(np.sum(labels*np.log(predictions + 1e-8),axis=1))
