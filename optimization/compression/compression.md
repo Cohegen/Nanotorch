@@ -300,3 +300,219 @@ Ranking Process:
 - Low-rank approximation discovers that large weight matrices often contain redundant information that can be captures with smaller matrices through mathematical decompostion.
 
 ### The Intuition Behind Low-Rank Approximation
+- Imagine you're storing a massive spreadsheet where many columns are highly correlated.
+- Instead of storing all columns seperately, we can store a few "basis" columns and coefficients for how to combine them to recreate the original data.
+
+```
+Low-Rank Decomposition Visualization:
+
+Original Matrix W (large):           Factorized Form (smaller):
+┌─────────────────────────┐         ┌──────┐    ┌──────────────┐
+│ 2.1  1.3  0.8  1.9  2.4 │         │ 1.1  │    │ 1.9  1.2  0.7│
+│ 1.5  2.8  1.2  0.9  1.6 │    ≈    │ 2.4  │ @  │ 0.6  1.2  0.5│
+│ 0.6  1.7  2.5  1.1  0.8 │         │ 0.8  │    │ 1.4  2.1  0.9│
+│ 1.9  1.0  1.6  2.3  1.8 │         │ 1.6  │    │ 0.5  0.6  1.1│
+└─────────────────────────┘         └──────┘    └──────────────┘
+    W (4×5) = 20 params           U (4×2)=8  +  V (2×5)=10  = 18 params
+
+Parameter Reduction:
+- Original: 4 × 5 = 20 parameters
+- Compressed: (4 × 2) + (2 × 5) = 18 parameters
+- Compression ratio: 18/20 = 0.9 (10% savings)
+
+For larger matrices, savings become dramatic:
+- W (1000×1000): 1M parameters → U (1000×100) + V (100×1000): 200K parameters
+- Compression ratio: 0.2 (80% savings)
+```
+
+### SVD :The Mathematical Foundation
+- Singular Value Decomposition (SVD) finds the optimal low-rank approximation by identifying the most important  **"directions"** in the data:
+
+```
+SVD Decomposition:
+    W = U × Σ × V^T
+
+Where:
+    U: Left singular vectors (input patterns)
+    Σ: Singular values (importance weights)
+    V^T: Right singular vectors (output patterns)
+
+Truncated SVD (Rank-k approximation):
+    W ≈ U[:,:k] × Σ[:k] × V^T[:k,:]
+
+Quality vs Compression Trade-off:
+    Higher k → Better approximation, less compression
+    Lower k → More compression, worse approximation
+
+Choosing Optimal Rank:
+    Method 1: Fixed ratio (k = ratio × min(m,n))
+    Method 2: Energy threshold (keep 90% of singular value energy)
+    Method 3: Error threshold (reconstruction error < threshold)
+```
+
+### When Low-Ranks Works Best 
+Low-rank approximation works well when:
+- **Matrices are large**: Compression benefits scale with size
+- **Data has structure**: Correlated patterns enable compression
+- **Moderate accuracy loss acceptable**: Some precision traded for efficiency
+
+It works poorly when:
+- **Matrices are already small**: Overhead exceeds benefits
+- **Data is random**: No patterns to exploit
+- **High precision required**: SVD introduces approximation error
+
+- The code that implements low-rank approximation is present in **compression.py**.
+
+## Knowledge Distillation
+- Knowledge distillation is like having an expert teacher simplify complex concepts for a student .
+- The large **"teacher"** model shares its knowledge with a smaller **"student"** model, achieving similar performance with far fewer parameters.
+
+### The Teacher-Student Learning Process
+- Unlike traditional training where models learn from labels (cat/dog), knowledge distillation uses **"soft"** targets that contain richer information about the teacher's decision making process.
+
+```
+Knowledge Distillation Process:
+
+                    TEACHER MODEL (Large)
+                    ┌─────────────────────┐
+Input Data ────────→│ 100M parameters     │
+                    │ 95% accuracy        │
+                    │ 500ms inference     │
+                    └─────────────────────┘
+                             │
+                             ↓ Soft Targets
+                    ┌─────────────────────┐
+                    │  Logits: [2.1, 0.3, │
+                    │           0.8, 4.2] │ ← Rich information
+                    └─────────────────────┘
+                             │
+                             ↓ Distillation Loss
+                    ┌─────────────────────┐
+Input Data ────────→│ STUDENT MODEL       │
+Hard Labels ───────→│ 10M parameters      │ ← 10x smaller
+                    │ 93% accuracy        │ ← 2% loss
+                    │ 50ms inference      │ ← 10x faster
+                    └─────────────────────┘
+
+Benefits:
+• Size: 10x smaller models
+• Speed: 10x faster inference
+• Accuracy: Only 2-5% degradation
+• Knowledge transfer: Student learns teacher's "reasoning"
+```
+
+### Temperature Scaling(Softening Decisions)
+
+- Temperature scaling is a key innovation that makes knowledge distillation effective .
+- It **"softens"** the teacher's confidence, revealing uncertainity that helps the student to learn.
+
+```
+Temperature Effect on Probability Distributions:
+
+Without Temperature (T=1):           With Temperature (T=3):
+Teacher Logits: [1.0, 2.0, 0.5]    Teacher Logits: [1.0, 2.0, 0.5]
+                       ↓                               ↓ ÷ 3
+Softmax: [0.09, 0.67, 0.24]         Logits/T: [0.33, 0.67, 0.17]
+         ^      ^      ^                       ↓
+      Low   High   Med              Softmax: [0.21, 0.42, 0.17]
+                                             ^      ^      ^
+Sharp decisions (hard to learn)           Soft   decisions (easier to learn)
+
+Why Soft Targets Help:
+1. Reveal teacher's uncertainty about similar classes
+2. Provide richer gradients for student learning
+3. Transfer knowledge about class relationships
+4. Reduce overfitting to hard labels
+```
+
+### Loss Function Design
+- The distillation loss balances learning from both the teacher's soft knowledge and the ground truth hard labels:
+
+```
+Combined Loss Function:
+
+L_total = α × L_soft + (1-α) × L_hard
+
+Where:
+    L_soft = KL_divergence(Student_soft, Teacher_soft)
+             │
+             └─ Measures how well student mimics teacher
+
+    L_hard = CrossEntropy(Student_predictions, True_labels)
+             │
+             └─ Ensures student still learns correct answers
+
+Balance Parameter α:
+• α = 0.7: Focus mainly on teacher (typical)
+• α = 0.9: Almost pure distillation
+• α = 0.3: Balance teacher and ground truth
+• α = 0.0: Ignore teacher (regular training)
+
+Temperature T:
+• T = 1: No softening (standard softmax)
+• T = 3-5: Good balance (typical range)
+• T = 10+: Very soft (may lose information)
+```
+
+## The Compression Pipeline
+
+### Compression Strategy Design
+- Real-world compression often combines multiple techniques in sequences, each targeting different types of redundancy:
+
+```
+Multi-Stage Compression Pipeline:
+
+Original Model (100MB, 100% accuracy)
+         │
+         ↓ Stage 1: Magnitude Pruning (remove 80% of small weights)
+Sparse Model (20MB, 98% accuracy)
+         │
+         ↓ Stage 2: Structured Pruning (remove 30% of channels)
+Compact Model (14MB, 96% accuracy)
+         │
+         ↓ Stage 3: Low-Rank Approximation (compress large layers)
+Factorized Model (10MB, 95% accuracy)
+         │
+         ↓ Stage 4: Knowledge Distillation (train smaller architecture)
+Student Model (5MB, 93% accuracy)
+
+Final Result: 20x size reduction, 7% accuracy loss
+```
+
+### Compression Configuration
+- Different deplolyment scenarios require different compression strategies:
+
+```
+Deployment Scenarios and Strategies:
+
+MOBILE APP (Aggressive compression needed):
+┌─────────────────────────────────────────┐
+│ Target: <10MB, <100ms inference         │
+│ Strategy:                               │
+│ • Magnitude pruning: 95% sparsity       │
+│ • Structured pruning: 50% channels      │
+│ • Knowledge distillation: 10x reduction │
+│ • Quantization: 8-bit weights           │
+└─────────────────────────────────────────┘
+
+EDGE DEVICE (Balanced compression):
+┌─────────────────────────────────────────┐
+│ Target: <50MB, <200ms inference         │
+│ Strategy:                               │
+│ • Magnitude pruning: 80% sparsity       │
+│ • Structured pruning: 30% channels      │
+│ • Low-rank: 50% rank reduction          │
+│ • Quantization: 16-bit weights          │
+└─────────────────────────────────────────┘
+
+CLOUD SERVICE (Minimal compression):
+┌─────────────────────────────────────────┐
+│ Target: Maintain accuracy, reduce cost  │
+│ Strategy:                               │
+│ • Magnitude pruning: 50% sparsity       │
+│ • Structured pruning: 10% channels      │
+│ • Dynamic batching optimization         │
+│ • Mixed precision inference             │
+└─────────────────────────────────────────┘
+```
+
