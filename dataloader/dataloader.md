@@ -16,13 +16,13 @@ Raw Data Storage          Dataset Interface         DataLoader Batching         
 ```
 
 ### Why this pipeline matters
-**Individual Access(Dataset)**: Neural networks can't process 50,000 files at once. We neeed a way to access one sample at a time i.e "Give me image #1247"
+- **Individual Access(Dataset)**: Neural networks can't process 50,000 files at once. We neeed a way to access one sample at a time i.e "Give me image #1247"
 
-**Batching Processing(DataLoader)**: GPUs are parrallel machines ,they much faster in processing 32 images simultanously than 1 image 32 times.
+- **Batching Processing(DataLoader)**: GPUs are parrallel machines ,they much faster in processing 32 images simultanously than 1 image 32 times.
 
-**Memory Efficiency** : loading all 50,000 images into memory would require ~150GB. Instead, we load only the current batch (~150MB).
+- **Memory Efficiency** : loading all 50,000 images into memory would require ~150GB. Instead, we load only the current batch (~150MB).
 
-**Training Variety**: Shuffling ensures the model sees different combinations each epochs, preventing memorization.
+- **Training Variety**: Shuffling ensures the model sees different combinations each epochs, preventing memorization.
 
 
 ## The Dataset Abstraction
@@ -66,13 +66,13 @@ Dataset Access:
 ```
 
 ### Why TensorDataset is powerful
-**Memory Allocation**: All data is pre-loaded ans stored contigously in memory, enabling fast access patterns.
+- **Memory Allocation**: All data is pre-loaded ans stored contigously in memory, enabling fast access patterns.
 
-**Vectorized Operations**: since everything is already tensors, no conversion overhead during training.
+- **Vectorized Operations**: since everything is already tensors, no conversion overhead during training.
 
-**Supervised Learning Perfect**: Naturally handles (features,labels) pairs, plus any additional metadata.
+- **Supervised Learning Perfect**: Naturally handles (features,labels) pairs, plus any additional metadata.
 
-**Batch-Friendly**: When DataLoader needs a batch, it can slice multiple samples efficiently.
+- **Batch-Friendly**: When DataLoader needs a batch, it can slice multiple samples efficiently.
 
 ## Real world Usage pattern
 
@@ -124,7 +124,7 @@ Step 2: DataLoader Groups into Batch (batch_size=2)
 
 ### The Shuffling Process
 
-The shuffling process randomizes which samples appear in which batches which is crucial for good training.
+- The shuffling process randomizes which samples appear in which batches which is crucial for good training.
 
 ```
 Without Shuffling (epoch 1):          With Shuffling (epoch 1):
@@ -142,10 +142,10 @@ Without Shuffling (epoch 2):          With Shuffling (epoch 2):
 
 ### Dataloader as a System Component
 
-**Memory management**: Dataloaders  only holds one batch in memory at a time, not the entire dataset.
-**Iteration Interface**: Provides Python iterator protocol so training loops can use `for batch in dataloader:`.
-**Collation Strategy**: Automatically stacks tensors from individual samples into batch tensors
-**Performance Critical**: This is often the bottleneck in the training pipelines -loading and preparing data can be slower than the forward pass.
+- **Memory management**: Dataloaders  only holds one batch in memory at a time, not the entire dataset.
+- **Iteration Interface**: Provides Python iterator protocol so training loops can use `for batch in dataloader:`.
+- **Collation Strategy**: Automatically stacks tensors from individual samples into batch tensors
+- **Performance Critical**: This is often the bottleneck in the training pipelines -loading and preparing data can be slower than the forward pass.
 
 ### Dataloader Algorithm
 ```
@@ -160,10 +160,10 @@ Without Shuffling (epoch 2):          With Shuffling (epoch 2):
 This transforms the dataset from "access one sample" to "iterate through batches" .
 
 ### Data Augmentation
-Data augmentation is crucial as it prevents overfitting through variety.
+- Data augmentation is crucial as it prevents overfitting through variety.
 
-Data Augmentation is one of the most effective techniques for improving model generalization.
-We do it by applying random transformations during training, artificially expand the dataset and force the model to learn robust, invariant features.
+- Data Augmentation is one of the most effective techniques for improving model generalization.
+- We do it by applying random transformations during training, artificially expand the dataset and force the model to learn robust, invariant features.
 
 ```
 Without Augmentation:                With Augmentation:
@@ -324,14 +324,14 @@ The key insight is shuffling overhead is typically negligible compared to the ac
 
 ### Pipeline Bottleneck Identification
 
-We measure three critical metrics i.e:
+- We measure three critical metrics i.e:
 
-1. **Throughput**: Samples processed per second
-2. **Memory Usage** : Peak memory during batch loading
-3. **Overhead**: Time spent on data vs computation
+       1. **Throughput**: Samples processed per second
+       2. **Memory Usage** : Peak memory during batch loading
+       3. **Overhead**: Time spent on data vs computation
 
-These measurements will reveal whether our pipeline is CPU-bound(slow data loading) or compute-bound (slow model).
-The analysis is in the **analyze_dataloader_performance.py**
+- These measurements will reveal whether our pipeline is CPU-bound(slow data loading) or compute-bound (slow model).
+- The analysis is in the **analyze_dataloader_performance.py**
 
 ## Practical Examples
 
