@@ -258,3 +258,117 @@ class KnowledgeDistillation:
             return -np.mean(np.log(predictions[np.arange(len(labels)),labels]+ 1e-8))
         else:
             return -np.mean(np.sum(labels*np.log(predictions + 1e-8),axis=1))
+
+def compress_model(model,compression_config):
+    """
+    Applies comprehensive model compression based on configuration.
+
+      EXAMPLE:
+    >>> config = {
+    ...     'magnitude_prune': 0.8,
+    ...     'structured_prune': 0.3,
+    ...     'low_rank': 0.5
+    ... }
+    >>> stats = compress_model(model, config)
+    >>> print(f"Final sparsity: {stats['sparsity']:.1f}%")
+    Final sparsity: 85.0%
+    """
+
+    original_params = sum(p.size for p in model.parameters())
+    original_sparsity = measure_sparsity(model)
+
+    stats = {
+        'original_params':original_params,
+        'original_sparsity':original_sparsity,
+        'applied_techniques':[]
+    }
+
+    #applying magnitude pruning
+    if 'magnitude_prune' in compression_config:
+        sparsity = compression_config['magnitude_prune']
+        magnitude_prune(model,sparsity=sparsity)
+        stats['applied_techniques'].append(f'magnitude_prune_{sparsity}')
+
+    #applying structured pruning
+    if 'structured_prune' in compression_config:
+        ratio = compression_config['structured_prune']
+        structured_prune(model,prune_ratio=ratio)
+        stats['applied_techniques'].append(f'structured_prune_{ratio}')
+
+    #applying low-rank approximation
+    if 'low_rank'in compression_config:
+        ratio = compression_config['low_rank']
+        stats['applied_techniques'].append(f'low_rank_{ratio}')
+
+
+    #final measurements
+    final_sparsity= measure_sparsity(model)
+    stats['final_sparsity'] = final_sparsity
+    stats['sparsity_increase'] = final_sparsity - original_sparsity
+
+    return stats 
+
+class Compressor:
+    """
+    Complete Compression class
+
+    Provides pruning,distillation, and low-rank approximation techniques 
+    """ 
+
+    @staticmethod
+    def measure_sparsity(model) ->float:
+        """
+        Measures sparsity of a model (returns fraction 0 -1)
+
+        """
+        return measure_sparsity(model) / 100.0
+
+    @staticmethod
+    def magnitude_prune(model,sparsity=0.5):
+        """
+        Prune model weights by magnitude
+        """
+        return magnitude_prune(model,sparsity)
+
+    @staticmethod
+    def structured_prune(model,prune_ration=0.5):
+        """
+        Pruning entire neurons/channels
+        """
+        return structured_prune(model,prune_ration)
+
+    @staticmethod
+    def compress_model(model,compression_config:Dict[str,Any]):
+        """
+        Applies complete compression pipeilen to a model
+
+        Args:
+           model:model to compress
+           compresssion_config: Dictionary with compression settings
+               - 'magnitude_sparsity': float(0-1)
+               - 'structured_prune_ratio':float(0-1)
+        
+        Returns:
+             compressed model with sparsity stats
+        """
+        stats = {
+            'original_sparsity': Compressor.measure_sparsity(model)
+        }
+
+        # Apply magnitude pruning
+        if 'magnitude_sparsity' in compression_config:
+            model = Compressor.magnitude_prune(
+                model, compression_config['magnitude_sparsity']
+            )
+
+        # Apply structured pruning
+        if 'structured_prune_ratio' in compression_config:
+            model = Compressor.structured_prune(
+                model, compression_config['structured_prune_ratio']
+            )
+
+        stats['final_sparsity'] = Compressor.measure_sparsity(model)
+        stats['compression_ratio'] = 1.0 / (1.0 - stats['final_sparsity']) if stats['final_sparsity'] < 1.0 else float('inf')
+
+        return model, stats
+
