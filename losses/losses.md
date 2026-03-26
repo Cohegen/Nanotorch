@@ -1,4 +1,4 @@
-"""
+
 ## Introduction to Loss Functions
 Loss functions are mathematical conscience of machine learning. They measure the distance betweeen what the model predicts and what actually happened. 
 
@@ -13,7 +13,7 @@ The loss functions measures how wrong our model is on each prediction it has mad
 - It is calculated by taking the Negative log-likelihood of correct class probability.
 - One of its notably properties is that it encourages confident correct predictions, punishes confident incorrect ones.
 
-**BinartCrossEntropyLoss**
+**BinaryCrossEntropyLoss**
 Used for binary classification e.g spam detection
 - It is property is that it makes symmetric penalties for false positives and false negatives.
 
@@ -28,9 +28,9 @@ Binary Decision Boundary:
      │  Loss → ∞       │  Loss → 0       │
      └─────────────────┴─────────────────┘
 ```
-"""
 
-"""
+
+
 ## Mathematical Foundations
 
 ## Mean Squared Error
@@ -41,7 +41,7 @@ MSE = (1/N) * Σ(prediction_i - target_i)²
 ```
 
 **Why square the differences**
--Mkaes all errors positive.
+-Makes all errors positive.
 -Heavily penalizes large errors.
 -Creates smooth gradients for optimization
 
@@ -107,9 +107,9 @@ logits - log(sum)              sum(exp(shifted))
                                logits - (log(sum) + max_val)
 ```
 Both give the same result, but the stable version never overflows
-"""
 
-"""
+
+
  ### MSELoss - Measuring Continous Prediction Quality
 Mean Squared Erro is a crucial loss function for regression problems. It measures how far from the true values.
 
@@ -157,10 +157,10 @@ Error Sensitivity Comparison:
  MAE: More robust to outliers
  Huber: Best of both worlds
 ```
-"""
 
-"""
-CrossEntropyLoss 
+
+
+### CrossEntropyLoss 
 It measres classification confidence
 Cross-entropy loss is the gold standars for multi-class classification. It measures how wrong your probability predictions are and heavily penalizes confident mistakes.
 
@@ -227,9 +227,7 @@ Output:  [0.7, 0.2, 0.1]         Output:  0.8 (spam probability)
 Must sum to 1.0                   Must be between 0 and 1 
 Uses: CrossEntropyLoss            Uses: BinaryCrossEntropyLoss
 ```
-"""
 
-"""
 ## BinaryCrossEntropyLoss - it measures Yes/No decision Quality
 Binary Cross-Entropy is specialized for yes/no decisions. It's like a regular cross-entropy loss but for exactly two classes.
 
@@ -302,9 +300,7 @@ Optimized for 2-class case      General for N classes
 2. **Probability calibration**: Output directly interpretable as probability
 3. **Efficient computation**: Simpler than full softmax for binary cases
 4. **Medical-grade**: Well-suited for safety-critical binary decisions
-"""
 
-"""
 ## Real-World Loss Function usage patterns
 Understanding when and why we use loss functions is crucial for all ML engineers.
 
@@ -349,9 +345,7 @@ MSE: Quadratic growth, managable with outliers.
 BCE/CE: Logarithmic growth, explodes with confident wrong predictions.
 ```
 
-"""
 
-"""
 ## System Analysis
 Loss functions seem simple, but they have important computational and numerical properties that affect training performance.
 
@@ -414,9 +408,7 @@ Memory: 3*B*sizeof(float)            │ log + index
 
                               Memory: (3*B*C + 2*B)*sizeof(float)
 ```
-"""
 
-"""
 ## Production Context - How Loss functions Scale
 
 Understanding how loss functions behave in production helps make informed engineering decisions about model architecture and training strategies
@@ -467,4 +459,4 @@ Common Production Optimizations:
    Use FP16 for forward pass, FP32 for loss.
    2× memory reduction, same accuracy.
 ```
-"""
+

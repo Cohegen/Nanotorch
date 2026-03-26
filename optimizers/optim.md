@@ -1,177 +1,201 @@
-# Optimization in Nano-Torch: A Deep Dive
+# Optimization in NanoTorch
 
-Optimization is the heartbeat of neural network training. While the **Autograd** engine provides the "compass" (gradients), the **Optimizer** is the "engine" that decides how to move the parameters across a complex, high-dimensional loss landscape to find the global minimum.
+This guide explores how we enable neural networks to learn from gradients using sophisticated algorithms. In the training loop, after we compute gradients via backpropagation, the optimizer's job is to decide exactly how to update the model's parameters to minimize loss.
 
-In this guide, we explore the implementation, mathematics, and system-level implications of the optimizers available in `nano-torch`.
+Note: `optimizers/optimizers.py` calls `enable_autograd()` at import time, so Tensor operations used for training will have gradient tracking enabled when you use these optimizers.
 
----
+## The Optimization Lifecycle
 
-## 1. The Optimization Lifecycle
+A typical training iteration in `nano-torch` follows this path:
 
-A typical training iteration in `nano-torch` is an orchestrated dance between the model, the data, and the optimizer. 
-
-### Implementation Pattern
 ```python
 import numpy as np
 from Tensor import Tensor
 from optimizers.optimizers import AdamW
 
-# 1. Setup: Initialize parameters and optimizer
-# We use AdamW with a standard learning rate and weight decay
-params = [Tensor(np.random.randn(512, 512), requires_grad=True)]
-optimizer = AdamW(params, lr=3e-4, weight_decay=0.01)
+# 1. Initialize parameters and optimizer
+params = [Tensor(np.random.randn(10, 10), requires_grad=True)]
+optimizer = AdamW(params, lr=1e-3, weight_decay=0.01)
 
 # --- Inside Training Loop ---
-for epoch in range(num_epochs):
-    for batch in dataloader:
-        # 2. Clear previous gradients
-        # Crucial: nano-torch gradients accumulate by default!
-        optimizer.zero_grad()
+# 2. Clear previous gradients
+optimizer.zero_grad()
 
-        # 3. Forward pass
-        # The computation graph is built dynamically here
-        output = model(batch.data)
-        loss = criterion(output, batch.target)
+# 3. Forward pass & compute loss (e.g., MSE)
+output = model(input_data)
+loss = ((output - target) ** 2).mean()
 
-        # 4. Backward pass
-        # This triggers the Autograd engine to populate .grad attributes
-        loss.backward()
+# 4. Backward pass (calculates .grad for all params)
+loss.backward()
 
-        # 5. Optimizer step
-        # The optimizer looks at each param.grad and updates param.data
-        optimizer.step()
-        
-        print(f"Step {optimizer.step_count}: Loss = {loss.data}")
+# 5. Optimizer step (updates .data using .grad)
+optimizer.step()
 ```
 
 ---
 
-## 2. The Optimizer Base Class: The Interface
+## Why Optimizers Matter
 
-All optimizers in `nano-torch` inherit from the `Optimizer` base class. This ensures a consistent API for any training loop, regardless of the underlying algorithm.
+1.  **Convergence**: Faster and more stable training.
+2.  **Generalization**: Proper regularization (like Weight Decay) helps the model perform well on unseen data.
+3.  **Efficiency**: Adaptive algorithms handle varying gradient scales across different layers.
 
-### Core Implementation Details:
-*   **Initialization**: When an optimizer is initialized, it automatically ensures that all passed parameters participate in autograd by setting `requires_grad = True` and `grad = None`.
-*   **State Management**: It tracks `step_count` (essential for algorithms like Adam that use bias correction) and maintains "buffers" (like momentum or variance) specific to each parameter.
-*   **Gradient Zeroing**: The `zero_grad()` method iterates through all parameters and resets their `.grad` to `None`. This is critical because `nano-torch` accumulates gradients during the backward pass.
-*   **Dual-Type Support**: The `step()` implementations are designed to handle gradients whether they are stored as `Tensor` objects or raw `numpy` arrays (which often happens when coming directly from the autograd engine).
+---
+## Conceptual View: what `step()` is really doing
+In this project, `loss.backward()` computes gradients and stores them in each parameter’s `.grad`.
+Then the optimizer’s `step()` turns those gradients into a concrete parameter update by applying an algorithm-specific rule.
+
+You can think of an optimizer as having three ingredients:
+
+- **Gradient signal**: `param.grad` (the direction and relative magnitude of “how to change” the loss).
+- **State** (optional): running estimates or buffers that smooth or rescale the gradient over time (e.g., `momentum_buffers`, `m_buffers`, `v_buffers`).
+- **Learning-rate scaling**: `lr` decides how big each step is.
+
+So the conceptual goal is: make updates that are
+- stable (won’t blow up when gradients are noisy or large)
+- scale-aware (different parameters can have very different gradient magnitudes)
+- regularized (weight decay discourages overly large weights)
+
+In `nano-torch`, `step()` also uses a simple contract:
+- it skips parameters where `param.grad is None`
+- it updates `param.data` in-place based on the algorithm rule
+
+## The Optimizer Base Class
+
+All optimizers in `nano-torch` inherit from the `Optimizer` class, which defines the standard interface:
+
+*   `zero_grad()`: Clears the `.grad` attribute of all tracked parameters (sets it back to `None`). Gradients in `nano-torch` accumulate (they are added together) during backprop, which is useful for "Gradient Accumulation" (simulating larger batches). Failing to call this will lead to gradients from previous steps interfering with the current update.
+*   `step()`: Performs the actual parameter update based on the specific algorithm (SGD, Adam, etc.).
+
+In this repo’s `Optimizer` base class, `step()` implementations skip parameters whose `grad is None`. They also handle `param.grad` being either a `Tensor` or a raw numpy array (normalizing to `grad.data` when needed).
 
 ---
 
-## 3. Stochastic Gradient Descent (SGD)
+## Stochastic Gradient Descent (SGD)
 
-SGD is the foundational optimization algorithm. In `nano-torch`, it is enhanced with **Momentum** and **Weight Decay**.
+SGD is the foundation of neural network optimization. It follows the simple principle: **"Move in the direction opposite to the gradient."**
 
-### The Math
-1.  **Weight Decay (L2 Regularization)**: If $\lambda > 0$, we first adjust the gradient:
-    $g_t = \nabla \theta + \lambda \theta$
-2.  **Momentum Update**:
-    $v_t = \beta \cdot v_{t-1} + g_t$
-3.  **Parameter Update**:
-    $\theta_{t+1} = \theta_t - \eta \cdot v_t$
+### Intuition: The Rolling Ball
+Imagine a ball on a hilly landscape. The gradient tells you which way is "up." To reach the bottom (minimum loss), you move "down."
 
-### Checkpointing API
-Unlike basic implementations, our `SGD` class provides an explicit API for state management:
-*   `has_momentum()`: Returns `True` if $\beta > 0$.
-*   `get_momentum()`: Safely retrieves the current momentum buffers (velocity vectors) for all parameters.
-*   `set_momentum_state(state)`: Restores buffers from a saved checkpoint, with built-in validation to ensure the architecture matches.
+### Momentum: Adding Mass
+Pure SGD often suffers from oscillations in narrow "valleys." Adding **Momentum** is like giving the ball mass. It builds up speed in consistent directions and "plows through" small bumps or noisy gradients.
 
-**Default Hyperparameters:**
-*   `lr`: 0.01
-*   `momentum`: 0.0 (Vanilla SGD)
-*   `weight_decay`: 0.0
+Conceptually, momentum turns “raw gradients” into a smoother update direction:
+- the optimizer keeps a **velocity buffer** `v` for each parameter
+- each step updates `v` as an exponential moving average of past gradients
+- the parameter update uses this smoothed `v` instead of the instantaneous gradient
 
----
+In this repo’s `SGD.step()`, if `weight_decay != 0`, it applies weight decay by adding `weight_decay * param.data` into the gradient before the momentum/parameter update.
 
-## 4. Adam: Adaptive Moment Estimation
+**Formula:**
+1.  `v_t = β * v_{t-1} + g_t` (Velocity update)
+2.  `θ_t = θ_{t-1} - η * v_t` (Parameter update)
 
-Adam is a "hybrid" optimizer that combines **Momentum** (first moment) and **RMSProp** (second moment). It calculates individual adaptive learning rates for every parameter.
+*   `β` (beta): Usually 0.9. It represents how much of the previous direction to keep.
 
-### The Adaptive Mechanism
-Adam tracks the "moving average" of both the gradients and their squares:
+**Code Example:**
+```python
+from optimizers.optimizers import SGD
 
-1.  **First Moment (m)**: Estimate of the mean gradient.
-    $m_t = \beta_1 m_{t-1} + (1 - \beta_1) g_t$
-2.  **Second Moment (v)**: Estimate of the uncentered variance.
-    $v_t = \beta_2 v_{t-1} + (1 - \beta_2) g_t^2$
+# Simple SGD
+optimizer = SGD(model.parameters(), lr=0.01)
 
-### Bias Correction
-Since $m$ and $v$ start at zero, they are biased toward zero early in training. Adam corrects this using the current `step_count` ($t$):
-*   $\hat{m}_t = \frac{m_t}{1 - \beta_1^t}$
-*   $\hat{v}_t = \frac{v_t}{1 - \beta_2^t}$
-
-**Final Update**: $\theta_{t+1} = \theta_t - \eta \cdot \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}$
-
-The $\epsilon$ (epsilon) parameter is a small constant (default `1e-8`) added for numerical stability to prevent division by zero.
+# SGD with Momentum (recommended for CNNs)
+optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
+```
 
 ---
 
-## 5. AdamW: The Modern Standard
+## Adam: Adaptive Moment Estimation
 
-AdamW fixes a fundamental flaw in how Adam handles L2 regularization (Weight Decay).
+Adam is the "Swiss Army Knife" of optimizers. It automatically adjusts the learning rate for *each individual parameter*.
 
-### The "Decoupling" Fix
-In standard Adam, weight decay is added to the gradient *before* the adaptive scaling. This means parameters with large gradients (and thus large $v_t$) receive *less* effective weight decay.
+### Why Adaptive?
+In a large network, a final layer weight might need a tiny learning rate (high precision), while a rarely-updated embedding weight might need a huge step. Adam handles this diversity automatically.
 
-**AdamW** decouples them:
-1.  Calculate the Adam update using only the "pure" gradient.
-2.  Apply the update to the parameter.
-3.  Apply weight decay directly: $\theta_{new} = \theta_{new} \cdot (1 - \eta \cdot \lambda)$
+### The Two-Memory System
+1.  **First Moment (m)**: Tracks the "Direction" (Momentum).
+2.  **Second Moment (v)**: Tracks the "Scale" (Variance). If a gradient is consistently large, `v` becomes large, which *divides* the learning rate, making the step smaller and safer.
 
-This ensures that regularization is applied uniformly relative to the learning rate, which is why AdamW is the preferred choice for **Transformers** and **Large Language Models**.
+Conceptually, Adam is doing two things at once:
+- it smooths gradients over time (through the first moment `m`)
+- it normalizes the step using an estimate of gradient variability (through the second moment `v`)
 
-**Default Hyperparameters:**
-*   `lr`: 0.001
-*   `betas`: (0.9, 0.999)
-*   `eps`: 1e-8
-*   `weight_decay`: 0.01
+That normalization is what makes Adam robust when different parameters experience gradients of very different magnitudes.
+
+**Formula:**
+`θ_t = θ_{t-1} - η * m_hat / (√v_hat + ε)`
+
+*   **`eps` (ε)**: A tiny number (1e-8) to prevent division by zero if `v` is zero.
+*   **`betas`**: The decay rates for `m` and `v`. Usually `(0.9, 0.999)`.
+
+In this repo, `step_count` is used to compute bias-corrected moments (`m_hat`, `v_hat`). Early in training, the moving averages are biased toward zero; bias correction makes the first few steps behave sensibly.
+
+**Code Example:**
+```python
+from optimizers.optimizers import Adam
+
+# Standard Adam initialization
+optimizer = Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-8)
+```
 
 ---
 
-## 6. System Analysis: Memory & Compute
+## AdamW: Fixing Weight Decay
 
-Choosing an optimizer is a trade-off between convergence speed and hardware constraints.
+AdamW is a specialized version of Adam that has become the standard for training **Transformers** and modern Large Language Models (LLMs).
 
-### A. Memory Overhead
-Optimizers require significant additional storage per parameter to store their state (buffers):
+### The "Bug" in Adam
+In standard Adam implementations (and in this repo’s `Adam`), weight decay (L2 regularization) is folded into the gradient as:
 
-| Optimizer | Buffers | Total Bytes per Param (FP32) | Overhead vs Weight |
+`grad += weight_decay * param`
+
+This happens *before* the Adam moment/adaptive update, so the effect of weight decay interacts with the adaptive scaling.
+
+Conceptually, that means the regularization strength is no longer “constant”: parameters that get re-scaled by Adam’s adaptive step can experience weaker or stronger effective weight decay than you intended.
+
+### The AdamW Fix
+AdamW **decouples** the weight decay from the gradient update. It applies the Adam step first, then shrinks the parameters by a percentage each step:
+
+`param.data *= (1 - lr * weight_decay)`
+
+So the learner can think of AdamW as:
+- Adam decides the gradient-based direction and size using moments
+- then AdamW applies an extra “pull to zero” on the parameters, independent of the gradient statistics
+
+**Correct Update:**
+`θ_t = θ_{t-1} - η * Δθ - (η * λ * θ_{t-1})`
+
+**Code Example:**
+```python
+from optimizers.optimizers import AdamW
+
+# Standard choice for modern deep learning
+optimizer = AdamW(model.parameters(), lr=1e-4, weight_decay=0.01)
+```
+
+---
+
+## Summary Analysis
+
+| Optimizer | Memory | Complexity | Best For |
 | :--- | :--- | :--- | :--- |
-| **Vanilla SGD** | 0 | 4 | 1x |
-| **SGD + Momentum**| 1 ($v$) | 8 | 2x |
-| **Adam / AdamW** | 2 ($m, v$) | 12 | 3x |
-
-**Scaling Example**: A 7B parameter LLM requires ~28GB for weights. Using AdamW adds another **56GB** of optimizer state, bringing the total to ~84GB (excluding gradients and activations).
-
-### B. Computational Complexity
-While all three are $O(N)$ where $N$ is the number of parameters, the constant factors differ:
-*   **SGD**: Fast. Simple additions and subtractions.
-*   **Adam/AdamW**: Slower per step. Requires power-of-two, square root, and division operations for every single parameter. However, they usually converge in significantly fewer steps than SGD.
+| **SGD** | 1x Params | Low | Basic ML, Fine-tuning |
+| **SGD+M** | 2x Params | Low | Computer Vision (CNNs) |
+| **Adam** | 3x Params | Medium | Generative Models, RNNs |
+| **AdamW** | 3x Params | Medium | Transformers, LLMs, General DL |
 
 ---
+## Practical debugging checklist (conceptual)
+When training diverges (loss blows up) or becomes `NaN`, it is usually one of these conceptual issues:
 
-## 7. Troubleshooting & Numerical Stability
+- **Learning rate too high**: even a “smart” optimizer can’t rescue steps that are too large.
+- **Forgetting `zero_grad()`**: gradients accumulate, so the optimizer may update as if you trained on multiple batches at once.
+- **Bad numerical regime**: some losses/activations can produce extremely large gradients; adaptive methods help, but `eps` still matters.
+- **Weight decay misconceptions**: if you expect AdamW-style regularization, but you’re using Adam (coupled weight decay), the regularization behavior may differ.
 
-### Symptom: Loss is NaN
-*   **Likely Cause**: Learning rate is too high, causing weight explosions.
-*   **Implementation Note**: Check the `eps` value in Adam. If your gradients are extremely small, `sqrt(v_t)` might vanish, making $\epsilon$ the only thing preventing division by zero.
-
-### Symptom: Vanishing Gradients
-*   **Likely Cause**: Deep architectures without residual connections or poor initialization.
-*   **Optimizer Role**: Adam can sometimes help "rescue" training by scaling up the updates for parameters with tiny gradients, but it's not a substitute for good architecture.
-
-### Symptom: Poor Generalization
-*   **Likely Cause**: Adam/AdamW might be finding "sharp" minima that don't generalize well to test data.
-*   **Fix**: Try switching to **SGD + Momentum** for the final stage of training, or increase `weight_decay` in AdamW.
-
----
-
-## 8. Summary Comparison
-
-| Feature | SGD | Adam | AdamW |
-| :--- | :--- | :--- | :--- |
-| **Learning Rate** | Global | Per-parameter (Adaptive) | Per-parameter (Adaptive) |
-| **Momentum** | Optional | Built-in | Built-in |
-| **Weight Decay** | Integrated L2 | Integrated L2 | **Decoupled** |
-| **Best For** | CNNs, Simple models | RNNs, Sparse data | Transformers, LLMs |
-| **Reliability** | Needs tuning | "Set and forget" | "Set and forget" + Regularization |
+### Pro-Tips for Choosing:
+*   **Start with AdamW**: It's robust and usually works well with its default settings (`lr=1e-3`, `weight_decay=0.01`).
+*   **Use SGD+Momentum**: If you are training a very deep CNN and have the time to tune the learning rate carefully; it often achieves slightly better final accuracy than Adam on ImageNet-style tasks.
+*   **Monitor your Gradients**: If you see "NaN" losses, check if your learning rate is too high or if your `eps` in Adam is too small.
