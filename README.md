@@ -1,7 +1,7 @@
 
 ![Output examples](azula.gif)
 
-![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/logo1.jpg)
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/logo1.png)
 
 ## MISSION
 - This repo intends to showcase the implementation of Pytorch one of the most popular ML libraries from Scratch in pure Python.
