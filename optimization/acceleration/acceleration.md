@@ -128,7 +128,7 @@ Single Step: y = gelu(x * weight + bias)  → Read 8GB, Write 4GB
 ### Understanding GELU: The Smooth Activation.
 - GELU (Gaussian Error Linear Unit) is used in transformers because it's **smooth** (differentiable everywhere).
 
-## **ADD ACTIVATION FUNCTIONS COMPARED HERE**
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/activation_functions_compared.jfif)
 
 **GELU Formula**: `GELU(x) = x * Φ(x)` where Φ is the standard normal CDF
 
