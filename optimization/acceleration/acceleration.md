@@ -1,4 +1,8 @@
 # Introduction Acceleration Module
+## Statement
+- This module doesn't use CUDA to perform acceleration we're typically using pure python.
+- Here we rely on Numpy,BLAS to perform several acceleration techniques.
+  
 
 ## Prerequisites
 - This module assummes that you covered the module below:
