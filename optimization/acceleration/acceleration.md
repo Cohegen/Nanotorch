@@ -1,10 +1,10 @@
 # Introduction Acceleration Module
 
 ## Prerequisites
-This module assummes that you covered the module below:
-       - Tensor Module
-       - Autograd Module
-       - Convolutions Module
+- This module assummes that you covered the module below:
+  - Tensor Module
+  - Autograd Module
+  - Convolutions Module
 
 ## Recap on the Performance Challenge
 - Neural networks often underutilize hardware due to:
