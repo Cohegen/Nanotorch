@@ -147,3 +147,52 @@ def unfused_gelu(x:Tensor) -> Tensor:
 
     return result
 
+
+def tiled_matmul(a:Tensor,b:Tensor,tile_size:int=64)-> Tensor:
+    """
+
+    Cache-aware matrix multiplication using tiling/blocking.
+
+    This function demonstrates the blocking algorithm for cache optimization by breaking
+    large matrix multiplications into cache-sized chunks.
+
+    Args:
+       a:First matrix (MxK)
+       b:second matrix (KxN)
+       tile_size:Block size for cache efficiency (default:64)
+
+    Returns:
+        Result matrix (MxN)
+
+     EXAMPLE:
+    >>> a = Tensor(np.random.randn(256, 256))
+    >>> b = Tensor(np.random.randn(256, 256))
+    >>> result = tiled_matmul(a, b, tile_size=64)
+    >>> # Same result as vectorized_matmul, but more cache-friendly for large matrices
+    """
+    #validating whether the dimensions of our input matrices are compatible for matmul
+    if len(a.shape) < 2 or len(b.shape) < 2:
+        raise ValueError(
+            f"Tiled matrix multiplication requires 2D+ tensors\n"
+            f"   Got shapes {a.shape} and {b.shape} ({len(a.shape)}D and {len(b.shape)}D tensors)\n"
+            f"   Tiling partitions matrices into cache-sized blocks, which requires 2D structure\n"
+            f"   Add dimensions with reshape: tensor.reshape(1, -1) for row vector or tensor.reshape(-1, 1) for column"
+        )
+
+    if a.shape[-1] != b.shape[-2]:
+        raise ValueError(
+            f"Tiled matrix multiplication shape mismatch: {a.shape} @ {b.shape}\n"
+            f"   Inner dimensions don't match: a.shape[-1]={a.shape[-1]} vs b.shape[-2]={b.shape[-2]}\n"
+            f"   Each tile of A's columns must align with tiles of B's rows for block multiplication\n"
+            f"   Reshape to align: b.reshape({a.shape[-1]}, -1) or transpose if dimensions are swapped"
+        )
+
+    #for educational purposes we use Numpy's matmul 
+    #which already implements cache-aware tiling via BLAS libraries (MKS,OpenBLAS)
+    #these libraries automatically partition large matrices into
+    #cache-sized blocks for optimal performance
+    result_data = np.matmul(a.data,b.data)
+    return Tensor(result_data)
+    
+
+
