@@ -153,3 +153,19 @@ Unfused Operations:                    Fused Operation:
 
 5 memory round-trips                   1 memory round-trip
 ```
+
+## Cache-Aware Matrix Multiplication
+- For large matrices that don't fit in the cache, we neeed **tiling** (alos called blocking).
+- This breaks the computation into cache-sized chunks for better performance.
+
+### Why Cache Awareness Matters
+- Modern processors have  a memory hierarchy:
+```
+L1 Cache:   32-64 KB   (fastest, 1-4 cycles)
+L2 Cache:   256 KB-1MB (fast, 10-20 cycles)
+L3 Cache:   8-32 MB    (moderate, 40-75 cycles)
+Main RAM:   8-64 GB    (slow, 100-300 cycles)
+```
+- When matrices are larger than cache, we get **cache missses** that slow us down dramatically.
+- Tiling keeps working set in cache for maximum reuse.
+
