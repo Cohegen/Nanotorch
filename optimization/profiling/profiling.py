@@ -1,4 +1,3 @@
-from re import M
 import sys 
 import os 
 import time 
@@ -227,7 +226,7 @@ class Profiler:
         dummy_input = Tensor(np.random.randn(*input_shape))
         activation_memory_mb = (dummy_input.data.nbytes*2) / MB_TO_BYTES
 
-        _ = model.forward(dummy_input)
+        _ = model(dummy_input)
 
         _current_memory,peak_memory = tracemalloc.get_traced_memory()
         peak_memory_mb = (peak_memory- _baseline_memory) /MB_TO_BYTES
@@ -254,13 +253,13 @@ class Profiler:
 
         #warmup runs to stabilize performance
         for _ in range(warmup):
-            _ = model.forward(input_tensor)
+            _ = model(input_tensor)
 
         #measurement runs 
         times = []
         for _ in range(iterations):
             start_time = time.perf_counter()
-            _ = model.forward(input_tensor)
+            _ = model(input_tensor)
             end_time = time.perf_counter()
             times.append((end_time-start_time)*1000)#converts to miliseconds
 
