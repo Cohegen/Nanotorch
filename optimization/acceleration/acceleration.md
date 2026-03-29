@@ -157,10 +157,13 @@ Unfused Operations:                    Fused Operation:
 
 5 memory round-trips                   1 memory round-trip
 ```
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/fusion_gains.png)
 
 ## Cache-Aware Matrix Multiplication
-- For large matrices that don't fit in the cache, we neeed **tiling** (alos called blocking).
+- For large matrices that don't fit in the cache, we need **tiling** (also called blocking).
 - This breaks the computation into cache-sized chunks for better performance.
+
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/cache_aware_tiling.png)
 
 ### Why Cache Awareness Matters
 - Modern processors have  a memory hierarchy:
