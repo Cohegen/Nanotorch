@@ -61,6 +61,7 @@ for i in range(4):        ┌─────┐      ┌─────┬──
                           1 element     4 elements per cycle
                           per cycle
 ```
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/vectorization.png)
 
 ### Memory Access Patterns
 - This is the hidden performance killer.
