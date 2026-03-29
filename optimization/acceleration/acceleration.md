@@ -38,7 +38,7 @@ Solution: Kernel fusion, memory layout optimization
 ### The Roofline Model 
 - Every processor has fundemental limits:
 
-**ADD THE ROOFLINE PERFORMANCE DIAGRAM HERE**
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/roofline_performance.png)
 
 **Key Insight**: Our goal is to understanding where our operations live on this graph so as to optimize effectively.
 
