@@ -1,7 +1,7 @@
 # Introduction Acceleration Module
 
 ## Prerequisites
-- This module assummes that you covered the module below:
+This module assummes that you covered the module below:
        - Tensor Module
        - Autograd Module
        - Convolutions Module
