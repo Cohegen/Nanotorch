@@ -224,7 +224,80 @@ class KVCache:
             'cache_tensors': total_cache_tensors,
             'total_elements': total_elements
         }
-        
+
+def _cached_generation_step(x,attention,cache_obj,layer_idx):
+    """
+    Executes a single cached generation step for one new token
+
+    This helper function isolated the core KV-Cche logic making it:
+       - Testable independently
+       - Reusable across different attention implementations
+       - Clear about what happens during cached generation
+
+    Args:
+        x: Input tensor for new token, shape(batch,1,embed_dim)
+        attention:Attention layer with q_proj,k_proj,v_proj,out_proj
+        cache_obj:KVCache instance holding previous K,V pairs
+        layer_idx :Which transformer layer (for cache indexing)
+
+    Returns:
+       Output tensor, shape (batch,1,embed_dim)
+
+    Algorithm:
+        1. Project x to Q, K, V for this single new token
+        2. Reshape to multi-head format
+        3. Update cache with new K, V
+        4. Retrieve all cached K, V (history + new)
+        5. Compute attention: softmax(Q @ K^T / sqrt(d)) @ V
+        6. Reshape and project to output
+
+    """
+    batch_size = x.shape[0]
+    num_heads = attention.num_heads
+    head_dim = attention.head_dim
+
+    #Projecting new token to Q,K,V
+    Q_new = attention.q_proj.forward(x) #(batch,1,embed_dim)
+    K_new = attention.k_proj.forward(x)
+    V_new = attention.v_proj.forward(x)
+
+    #Reshaping to multi-head format (batch,num_heads,1,head_dim)
+    Q_heads = Tensor(np.transpose(
+        Q_new.reshape(batch_size,1,num_heads,head_dim).data,(0,2,1,3)
+
+    ))
+    K_heads = Tensor(np.transpose(
+        K_new.reshape(batch_size,1,num_heads,head_dim).data,(0,2,1,3)
+
+    ))
+    V_heads = Tensor(np.transpose(
+        V_new.reshape(batch_size,1,num_heads,head_dim).data,(0,2,1,3)
 
 
+    ))
+
+    #Updating cache with new K,V
+    cache_obj.update(layer_idx,K_heads,V_heads)
+
+    #Retrieving all cached K,V (includes history + new token)
+    K_all,V_all = cache_obj.get(layer_idx)
+
+    #Compute attention using Q with all cached K,V
+    #using .data (numpy) for inference-only operation (no gradients needed)
+    K_transposed = np.transpose(K_all.data,(0,1,3,2))
+    scores = np.matmul(Q_heads.data,K_transposed) /np.srt(head_dim)
+
+    #stable softmax
+    scores_max = np.max(scores,axis=-1,keepdims=True)
+    exp_scores = np.exp(scores - scores_max)
+    attention_weights = exp_scores /np.sum(exp_scores,axis=-1,keepdims=True)
+
+    #Applying attention to values
+    attention_output = np.matmul(attention_weights,V_all.data)
+
+    #Reshaping ad projecting to output
+    attention_output_transposed = np.transpose(attention_output, (0, 2, 1, 3))
+    concat_output = Tensor(attention_output_transposed.reshape(batch_size, 1, num_heads * head_dim))
+
+    return attention.out_proj.forward(concat_output)
 
