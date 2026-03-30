@@ -276,7 +276,7 @@ for each new token:
 ### Performance
 
 ```
-```
+
 Expected Speedup by Sequence Length:
 ┌───────────┬──────────┬───────────┬──────────┐
 │ Seq Len   │ No Cache │ With Cache│ Speedup  │
