@@ -7,7 +7,7 @@ Neural network layers are fundemental building blocks that transform data as flo
 
 -Each layer learns its own piece of the puzzle. Linear layers learn which features matter, while dropout prevents overfitting by forcing robustness.
 
-"""
+
 ## Mathematical Background
 A linear layer implements: **y = xW + b**
 
@@ -33,11 +33,9 @@ Manual Compostion:
                             #Total: 203,530 params
 ```
 
-Memort usage: 4 bytes/param x 203,530 =~ 814kb for weights alone
-"""
+Memory usage: 4 bytes/param x 203,530 =~ 814kb for weights alone
 
-"""
-##Linear Layer- The Foundation of Neural Networks
+## Linear Layer- The Foundation of Neural Networks
 
 Linear layers also called Dense or Fully Connected layers are fundemental building blocks of neural networks.They implement the mathematical operation:
  **y = xW + b**
@@ -74,10 +72,10 @@ Linear(784, 256) Parameters:
 └─────────────────────────────┘
                 Total: 803.8 KB for one layer
 ```
--The code for Linear layer is in the python script **layers.py**
-"""
+- The code for Linear layer is in the python script **layers.py**
 
-"""
+
+
 ### Dropoout layer - prevents overfitting
 Dropout is regularization technique that randomly "turns off" neurons during training. This forces the network to not rely heavily on any single neuron, making it more robust and generalizable.
 
@@ -127,16 +125,16 @@ Dropout Memory Usage:
 Computational Overhead: Minimal (element-wise operations)
 ```
 
-"""
 
-"""
+
+
 ## Sequential - layer container for composition
 `Sequential` chains layer together, calling forward() on each in order.
 
 
-"""
 
-"""
+
+
 ### Network Architecture Visualization
 ```
 MNIST Classification Network (3-Layer MLP):
@@ -184,9 +182,9 @@ Parameter Breakdown (Manual Layer Composition):
                     Memory: ~940 KB (float32)
 ```
 
-"""
 
-"""
+
+
 ### Memory Analysis Overview
 ```
 Layer Memory Components:
@@ -231,4 +229,4 @@ Layer Operation Complexity:
 │   Overhead: Minimal compared to linear layers               │
 └─────────────────────────────────────────────────────────────┘
 ```
-"""
+
