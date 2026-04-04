@@ -309,9 +309,32 @@ Why? Longer sequences = more redundant computation without cache.
 3. Consider batch inference to amortize model loading costs
 4. Monitor cache memory usage in production
 
+## Detailed Implementation in `memoization.py`
+
+### 1. The `KVCache` Class API
+The `KVCache` directly implements the memory layout required to store intermediate keys and values without tracking gradients (inference-only). 
+- **`__init__(batch_size, max_seq_len, num_layers, num_heads, head_dim)`**: Pre-allocates zero-filled tensors for the maximum sequence length. 
+- **`update(layer_idx, key, value)`**: Efficient $O(1)$ write operation that stores keys and values exactly at `seq_pos` utilizing `.data` to prevent gradient tracking graph growth.
+- **`get(layer_idx)`**: Returns a properly sized snapshot of all cached tensors up to `seq_pos`.
+- **`advance()`**: Increments the write pointer (`seq_pos`). Called once per token generation after all layers are processed.
+- **`reset()`**: Zero-fills the cache and resets `seq_pos` to 0. Allows the memory pool to be reused across different generations.
+- **`get_memory_usage()`**: Evaluates the specific internal capacities to compute the true memory footprint in Megabytes (MB).
+
+### 2. The `_cached_generation_step` Function
+This helper function isolates the logic required to implement the single step of autoregressive generation via KV-Caching. It implements the mathematical theory outlimed above into practical execution:
 
 
 
 
 
+
+**Algorithm Flow:**
+1. **Projection**: It receives a *single* new token `x` with shape `(batch, 1, embed_dim)` and projects it to `Q_new`, `K_new`, and `V_new`.
+2. **Reshape**: Rearranges tensors into multi-head format `(batch, num_heads, 1, head_dim)`.
+3. **Cache Update**: Calls `cache_obj.update(...)` inserting `K_new` and `V_new` into the cache memory.
+4. **Cache Retrieval**: Extracts everything stored up to this position `K_all`, `V_all` (which reconstructs the context history along with our new token).
+5. **Attention Math**: Computes scaled dot-product attention utilizing `Q_new` against the complete history `K_all`. Calculates final attention weights via numerically stable softmax.
+6. **Output**: Multiplies weights with the history `V_all` and runs the final linear output projection.
+
+By utilizing this structure in **`memoization.py`**, we effectively achieve the optimized $O(n)$ cache-aware generation loop.
 

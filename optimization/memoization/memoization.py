@@ -39,7 +39,7 @@ class KVCache:
     """
     def __init__(self,batch_size:int,max_seq_len:int,num_layers:int,num_heads:int,head_dim:int):
         """
-        Intialize KV cache for efficient generation
+        Initialize KV cache for efficient generation
 
         Args:
             batch_size: Number of sequences to generate simultaneously
@@ -124,7 +124,7 @@ class KVCache:
         key_cache.data[:,:,self.seq_pos:self.seq_pos+1,:] = key.data 
         value_cache.data[:,:,self.seq_pos:self.seq_pos+1,:] = value.data 
 
-        # seq_los is advance externally via advance() after all layers process
+        # seq_pos is advanced externally via advance() after all layers process
 
 
     def get(self,layer_idx:int)->Tuple[Tensor,Tensor]:
@@ -171,7 +171,7 @@ class KVCache:
         
         #Creating new Tensors from .data (no gradient tracking)
         cached_keys = Tensor(key_cache.data[:,:,:valid_len,:])
-        cached_values = Tensor(value_cache.data[:,:,:valid_len:,:])
+        cached_values = Tensor(value_cache.data[:,:,:valid_len,:])
 
         return cached_keys ,cached_values
 
@@ -179,7 +179,7 @@ class KVCache:
         """
         Advancing sequence position after processing current token
 
-        Call this after all layers have processed the curent token and updated their caches.
+        Call this after all layers have processed the current token and updated their caches.
         This moves the write pointer forward
         """
         self.seq_pos += 1
@@ -229,7 +229,7 @@ def _cached_generation_step(x,attention,cache_obj,layer_idx):
     """
     Executes a single cached generation step for one new token
 
-    This helper function isolated the core KV-Cche logic making it:
+    This helper function isolates the core KV-Cache logic making it:
        - Testable independently
        - Reusable across different attention implementations
        - Clear about what happens during cached generation
@@ -285,7 +285,7 @@ def _cached_generation_step(x,attention,cache_obj,layer_idx):
     #Compute attention using Q with all cached K,V
     #using .data (numpy) for inference-only operation (no gradients needed)
     K_transposed = np.transpose(K_all.data,(0,1,3,2))
-    scores = np.matmul(Q_heads.data,K_transposed) /np.srt(head_dim)
+    scores = np.matmul(Q_heads.data,K_transposed) /np.sqrt(head_dim)
 
     #stable softmax
     scores_max = np.max(scores,axis=-1,keepdims=True)
@@ -295,7 +295,7 @@ def _cached_generation_step(x,attention,cache_obj,layer_idx):
     #Applying attention to values
     attention_output = np.matmul(attention_weights,V_all.data)
 
-    #Reshaping ad projecting to output
+    #Reshaping and projecting to output
     attention_output_transposed = np.transpose(attention_output, (0, 2, 1, 3))
     concat_output = Tensor(attention_output_transposed.reshape(batch_size, 1, num_heads * head_dim))
 
