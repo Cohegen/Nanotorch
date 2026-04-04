@@ -1,12 +1,9 @@
 import os
-from pyclbr import Class
-from re import T
 import sys
-from unittest import result
 sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np
 from typing import Optional, List,Tuple
-from Tensor import Tensor 
+from Tensor.tensor import Tensor 
 
 #Constants for small numerical differentiation
 EPILSON = 1e-7
@@ -155,7 +152,12 @@ class SubBackward(Function):
         #computing gradient of first input
         if isinstance(a,Tensor) and a.requires_grad:
             grad_a = grad_output # ∂(a-b)/∂a = 1
-        
+
+        #computing gradient of second input
+        if isinstance(b,Tensor) and b.requires_grad:
+            grad_b = -grad_output # ∂(a-b)/∂b = -1
+
+        return grad_a,grad_b
 class DivBackward(Function):
     """
     Gradient computation for tensor division.
@@ -594,7 +596,7 @@ class SigmoidBackward(Function):
              return grad_output * sigmoid_grad,
         return None,
 
-class SoftmaxBckward(Function):
+class SoftmaxBackward(Function):
     """
     Gradient computation for softmax activation
 
@@ -639,7 +641,7 @@ class SoftmaxBckward(Function):
             sum_term = np.sum(grad_output*self.output_data,axis=self.dim,keepdims=True)
 
             #softmax gradient: softmax * (grad_output -sum_term)
-            grad_x = self.grad_output * (grad_output - sum_term)
+            grad_x = self.output_data * (grad_output - sum_term)
 
             return (grad_x,)
 
@@ -796,8 +798,8 @@ class CrossEntropyBackward(Function):
             #gradients = (softmax - one_hot) / batch_size
             grad = (softmax - one_hot) / self.batch_size
 
-            return grad* grad_output
-        return None,
+            return (grad * grad_output,)
+        return (None,)
 
 def enable_autograd(quiet=False):
     """
@@ -1202,7 +1204,7 @@ def enable_autograd(quiet=False):
             #attach the correct gradient function
             if x.requires_grad:
                 result.requires_grad = True 
-                result._grad_fn = SoftmaxBckward(x,result,dim)
+                result._grad_fn = SoftmaxBackward(x,result,dim)
 
             return result 
 
@@ -1231,7 +1233,7 @@ def enable_autograd(quiet=False):
             result = Tensor(bce_loss)
 
             if predictions.requires_grad:
-                result.requires_grad =True 
+                result.requires_grad = True 
                 result._grad_fn = BCEBackward(predictions,targets)
 
             return result 
@@ -1269,8 +1271,8 @@ def enable_autograd(quiet=False):
             result = Tensor(ce_loss)
 
             if logits.requires_grad:
-                result.requires_grad=T
-                result.grad_fn =CrossEntropyBackward(logits,targets)
+                result.requires_grad = True
+                result._grad_fn = CrossEntropyBackward(logits,targets)
 
             return result
 
