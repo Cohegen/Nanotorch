@@ -21,25 +21,25 @@ This repository intends to showcase the implementation of PyTorch, one of the mo
 
 ## Table of Contents
 
-| Module | Date Created | Description |
-| :--- | :--- | :--- |
-| [activations](./activations) | Jan 10, 2026 | Common activation functions (ReLU, Sigmoid, Softmax, Tanh, GELU). |
-| [Tensor](./Tensor) | Jan 10, 2026 | Core multidimensional array structure with basic operations. |
-| [layers](./layers) | Jan 14, 2026 | Fundamental building blocks for neural networks (Linear, Dropout, etc.). |
-| [losses](./losses) | Jan 17, 2026 | Standard loss functions for optimization. |
-| [dataloader](./dataloader) | Jan 24, 2026 | Utilities for batching, shuffling, and processing datasets. |
-| [autograd](./autograd) | Jan 31, 2026 | Automatic differentiation engine for gradient computation. |
-| [optimizers](./optimizers) | Feb 8, 2026 | Optimization algorithms (SGD, Adam, etc.) to update parameters. |
-| [training](./training) | Feb 13, 2026 | Scripts and utilities for managing the training lifecycle. |
-| [convolution](./convolution) | Feb 21, 2026 | Implementation of convolutional layers and pooling operations. |
-| [tokenization](./tokenization) | Feb 24, 2026 | Text processing and tokenization tools for NLP. |
-| [embeddings](./embeddings) | Mar 3, 2026 | Vector representation for discrete tokens and positional encoding. |
-| [attention](./attention) | Mar 6, 2026 | Scaled Dot-Product and Multi-Head Attention mechanisms. |
-| [transformers](./transformers) | Mar 13, 2026 | Transformer architecture implementation. |
-| [optimization](./optimization) | Mar 18, 2026 | Specialized optimization techniques and performance analyses. |
-| [nanotorch](./nanotorch) | Apr 4, 2026 | Core library integration. |
-| [experiments](./experiments) | Apr 4, 2026 | Pipeline tests and architectural experiments. |
-| [projects](./projects) | Apr 4, 2026 | End-to-end applications and project examples. |
+| Module | Description |
+| :--- | :--- |
+| [Tensor](./Tensor) | Core multidimensional array structure with basic operations. |
+| [activations](./activations) | Common activation functions (ReLU, Sigmoid, Softmax, Tanh, GELU). |
+| [layers](./layers) | Fundamental building blocks for neural networks (Linear, Dropout, etc.). |
+| [losses](./losses) | Standard loss functions for optimization. |
+| [dataloader](./dataloader) | Utilities for batching, shuffling, and processing datasets. |
+| [autograd](./autograd) | Automatic differentiation engine for gradient computation. |
+| [optimizers](./optimizers) | Optimization algorithms (SGD, Adam, etc.) to update parameters. |
+| [training](./training) | Scripts and utilities for managing the training lifecycle. |
+| [convolution](./convolution) | Implementation of convolutional layers and pooling operations. |
+| [tokenization](./tokenization) | Text processing and tokenization tools for NLP. |
+| [embeddings](./embeddings) | Vector representation for discrete tokens and positional encoding. |
+| [attention](./attention) | Scaled Dot-Product and Multi-Head Attention mechanisms. |
+| [transformers](./transformers) | Transformer architecture implementation. |
+| [optimization](./optimization) | Specialized optimization techniques and performance analyses. |
+| [nanotorch](./nanotorch) | Core library integration. |
+| [experiments](./experiments) | Pipeline tests and architectural experiments. |
+| [projects](./projects) | End-to-end applications and project examples. |
 
 ## Disclaimer
 The implementation is still ongoing, so the code in this repo is not fully complete.
