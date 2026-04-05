@@ -17,8 +17,8 @@ from losses.losses import CrossEntropyLoss
 from optimizers.optimizers import SGD
 
 
-def load_nanodigits(data_dir=None, max_train=200, max_test=50, seed=7):
-    """Load a CPU-friendly slice of the local NanoDigits train/test split."""
+def load_nanodigits(data_dir=None):
+    """Load the local NanoDigits train/test split."""
     if data_dir is None:
         data_dir = PROJECT_ROOT / "datasets" / "nanodigits"
     else:
@@ -34,22 +34,10 @@ def load_nanodigits(data_dir=None, max_train=200, max_test=50, seed=7):
     test_images = np.asarray(test["images"], dtype=np.float32)
     test_labels = np.asarray(test["labels"], dtype=np.int64)
 
-    rng = np.random.default_rng(seed)
-
-    if max_train is not None and max_train < len(train_images):
-        train_idx = rng.choice(len(train_images), size=max_train, replace=False)
-        train_images = train_images[train_idx]
-        train_labels = train_labels[train_idx]
-
-    if max_test is not None and max_test < len(test_images):
-        test_idx = rng.choice(len(test_images), size=max_test, replace=False)
-        test_images = test_images[test_idx]
-        test_labels = test_labels[test_idx]
-
     return (train_images, train_labels), (test_images, test_labels)
 
 
-def batch_iterator(images, labels, batch_size=16, shuffle=True, seed=7):
+def batch_iterator(images, labels, batch_size=32, shuffle=True, seed=7):
     """Yield mini-batches shaped for Conv2d: (batch, channels, height, width)."""
     indices = np.arange(len(images))
     if shuffle:
@@ -134,7 +122,7 @@ def accuracy_from_logits(logits, labels):
     return float(np.mean(predictions == labels))
 
 
-def train_epoch(model, images, labels, optimizer, loss_fn, batch_size=16, seed=7):
+def train_epoch(model, images, labels, optimizer, loss_fn, batch_size=32, seed=7):
     total_loss = 0.0
     total_correct = 0
     total_examples = 0
@@ -159,7 +147,7 @@ def train_epoch(model, images, labels, optimizer, loss_fn, batch_size=16, seed=7
     return total_loss / total_examples, total_correct / total_examples
 
 
-def evaluate(model, images, labels, batch_size=16):
+def evaluate(model, images, labels, batch_size=64):
     total_loss = 0.0
     total_correct = 0
     total_examples = 0
@@ -195,20 +183,10 @@ def smoke_test():
         assert param.grad is not None, "Expected gradients on all trainable parameters"
 
 
-def main(
-    epochs=3,
-    batch_size=16,
-    learning_rate=0.03,
-    momentum=0.9,
-    max_train=200,
-    max_test=50,
-):
+def main(epochs=1, batch_size=32, learning_rate=0.03, momentum=0.9):
     smoke_test()
 
-    (train_images, train_labels), (test_images, test_labels) = load_nanodigits(
-        max_train=max_train,
-        max_test=max_test,
-    )
+    (train_images, train_labels), (test_images, test_labels) = load_nanodigits()
 
     model = LeNetDigits(num_classes=10)
     optimizer = SGD(model.parameters(), lr=learning_rate, momentum=momentum)
@@ -218,8 +196,7 @@ def main(
     print(f"Train: {train_images.shape}, Test: {test_images.shape}")
     print(
         f"Hyperparameters -> epochs={epochs}, batch_size={batch_size}, "
-        f"lr={learning_rate}, momentum={momentum}, "
-        f"max_train={max_train}, max_test={max_test}"
+        f"lr={learning_rate}, momentum={momentum}"
     )
 
     for epoch in range(epochs):
@@ -245,3 +222,4 @@ def main(
 
 if __name__ == "__main__":
     main()
+
