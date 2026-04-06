@@ -42,13 +42,36 @@ This repository intends to showcase the implementation of PyTorch, one of the mo
 | [projects](./projects) | End-to-end applications and project examples. |
 
 
-## BenchMarks
-- In the the project directory, I've carried out some experiments to test whether NanoTorch
-performs as expected.
-- I performed the following experiments:
+This benchmark guide documents representative training behavior for the educational models in NanoTorch. The goal is not to present production-grade leaderboard numbers, but to communicate how the framework behaves during optimization, how quickly models converge, and how training and evaluation metrics evolve across epochs.
 
-### 1.Training the a Lenet-5 model on a Mini-Mnist dataset.
--After training, the experiment produced the following results:
+For the current CNN benchmark, `projects/CNNS/lenet_digits.py` trains a LeNet-style classifier on the local NanoDigits dataset for 10 epochs and writes two benchmark artifacts:
+- `projects/CNNS/plots/lenet_digits_loss.png`
+- `projects/CNNS/plots/lenet_digits_accuracy.png`
+
+These plots track four core statistics after every epoch: training loss, test loss, training accuracy, and test accuracy. They are intended to help readers judge convergence quality, generalization behavior, and the stability of the underlying training implementation.
+
+### LeNetDigits Benchmark Summary
+
+| Benchmark | Dataset | Epochs | Metrics Tracked | Observed Result |
+| :--- | :--- | :---: | :--- | :--- |
+| LeNetDigits | NanoDigits | 10 | Train loss, test loss, train accuracy, test accuracy | Loss curves decrease over training, while accuracy curves increase and then stabilize toward the later epochs. |
+
+### LeNetDigits Benchmark Interpretation
+
+| Signal | What the plots show | Why it matters |
+| :--- | :--- | :--- |
+| Training loss | Falls steadily across epochs | The optimizer is successfully fitting the training split. |
+| Test loss | Declines alongside training loss | The model is improving on held-out data rather than only memorizing the train set. |
+| Training accuracy | Rises quickly in early epochs and then tapers | The network learns useful digit features early and approaches convergence later in training. |
+| Test accuracy | Tracks the training trend with a small gap | Generalization remains reasonably aligned with training performance. |
+
+### Benchmark Artifacts
+
+| Plot | Purpose |
+| :--- | :--- |
+| `lenet_digits_loss.png` | Visualizes how train loss and test loss change after each epoch. |
+| `lenet_digits_accuracy.png` | Visualizes how train accuracy and test accuracy change after each epoch. |
+
 
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/projects/CNNS/plots/lenet_digits_accuracy.png)
 
