@@ -42,7 +42,17 @@ This repository intends to showcase the implementation of PyTorch, one of the mo
 | [projects](./projects) | End-to-end applications and project examples. |
 
 
+## BenchMarks
+- In the the project directory, I've carried out some experiments to test whether NanoTorch
+performs as expected.
+- I performed the following experiments:
+
+### 1.Training the a Lenet-5 model on a Mini-Mnist dataset.
+-After training, the experiment produced the following results:
+
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/projects/CNNS/plots/lenet_digits_accuracy.png)
+
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/projects/CNNS/plots/lenet_digits_loss.png)
 
 
 ## Disclaimer
