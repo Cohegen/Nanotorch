@@ -41,6 +41,10 @@ This repository intends to showcase the implementation of PyTorch, one of the mo
 | [experiments](./experiments) | Pipeline tests and architectural experiments. |
 | [projects](./projects) | End-to-end applications and project examples. |
 
+
+![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/projects/CNNS/plots/lenet_digits_accuracy.png)
+
+
 ## Disclaimer
 The implementation is still ongoing, so the code in this repo is not fully complete.
 
