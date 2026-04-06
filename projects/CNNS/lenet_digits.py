@@ -15,6 +15,7 @@ from convolution.convolutions import Conv2d, MaxPool2d
 from layers.layers import Linear
 from losses.losses import CrossEntropyLoss
 from optimizers.optimizers import SGD
+from training_plots import plot_training_history
 
 
 def load_nanodigits(data_dir=None):
@@ -183,14 +184,22 @@ def smoke_test():
         assert param.grad is not None, "Expected gradients on all trainable parameters"
 
 
-def main(epochs=1, batch_size=32, learning_rate=0.03, momentum=0.9):
+def main(epochs=10, batch_size=32, learning_rate=0.03, momentum=0.9):
     smoke_test()
 
     (train_images, train_labels), (test_images, test_labels) = load_nanodigits()
+    plot_dir = Path(__file__).resolve().parent / "plots"
 
     model = LeNetDigits(num_classes=10)
     optimizer = SGD(model.parameters(), lr=learning_rate, momentum=momentum)
     loss_fn = CrossEntropyLoss()
+    history = {
+        "epochs": [],
+        "train_loss": [],
+        "test_loss": [],
+        "train_acc": [],
+        "test_acc": [],
+    }
 
     print("Training LeNetDigits on NanoDigits")
     print(f"Train: {train_images.shape}, Test: {test_images.shape}")
@@ -198,6 +207,7 @@ def main(epochs=1, batch_size=32, learning_rate=0.03, momentum=0.9):
         f"Hyperparameters -> epochs={epochs}, batch_size={batch_size}, "
         f"lr={learning_rate}, momentum={momentum}"
     )
+    print(f"Saving plots to: {plot_dir}")
 
     for epoch in range(epochs):
         train_loss, train_acc = train_epoch(
@@ -210,6 +220,13 @@ def main(epochs=1, batch_size=32, learning_rate=0.03, momentum=0.9):
             seed=7 + epoch,
         )
         test_loss, test_acc = evaluate(model, test_images, test_labels, batch_size=batch_size)
+
+        history["epochs"].append(epoch + 1)
+        history["train_loss"].append(train_loss)
+        history["test_loss"].append(test_loss)
+        history["train_acc"].append(train_acc)
+        history["test_acc"].append(test_acc)
+        plot_training_history(history, plot_dir)
 
         print(
             f"Epoch {epoch + 1:02d}/{epochs} | "
