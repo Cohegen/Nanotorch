@@ -41,7 +41,7 @@ This repository intends to showcase the implementation of PyTorch, one of the mo
 | [experiments](./experiments) | Pipeline tests and architectural experiments. |
 | [projects](./projects) | End-to-end applications and project examples. |
 
-
+## Benchmarks
 This benchmark guide documents representative training behavior for the educational models in NanoTorch. The goal is not to present production-grade leaderboard numbers, but to communicate how the framework behaves during optimization, how quickly models converge, and how training and evaluation metrics evolve across epochs.
 
 For the current CNN benchmark, `projects/CNNS/lenet_digits.py` trains a LeNet-style classifier on the local NanoDigits dataset for 10 epochs and writes two benchmark artifacts:
