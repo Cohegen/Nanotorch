@@ -194,6 +194,11 @@ The following statistics come from the saved benchmark artifacts in `projects/CN
 | Lowest train loss | 1.7305 at epoch 9 |
 | Lowest test loss | 1.8803 at epoch 6 |
 
+
+![Mini ResNet Digits Loss](./projects/CNNS/plots/lenet_cifar_loss.png)
+
+![Mini ResNet Digits Accuracy](./projects/CNNS/plots/lenet_cifar_accuracy.png)
+
 ### LeNetCIFAR Epoch-by-Epoch Results
 
 | Epoch | Train Loss | Test Loss | Train Acc | Test Acc |
