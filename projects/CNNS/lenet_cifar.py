@@ -194,7 +194,7 @@ def main(
     batch_size=8,
     learning_rate=0.001,
     quick_test=False,
-    train_limit=1000,
+    train_limit=500,
     test_limit=200,
 ):
     data_manager = DatasetManager()
@@ -313,8 +313,3 @@ if __name__ == "__main__":
         train_limit=args.train_limit,
         test_limit=args.test_limit,
     )
-
-
-
-
-

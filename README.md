@@ -41,6 +41,9 @@ This repository intends to showcase the implementation of PyTorch, one of the mo
 | [experiments](./experiments) | Pipeline tests and architectural experiments. |
 | [projects](./projects) | End-to-end applications and project examples. |
 
+## Disclaimer
+The implementation is still ongoing, so the code in this repo is not fully complete.
+
 ## Benchmarks
 This benchmark guide documents representative training behavior for the educational models in NanoTorch. The goal is not to present production-grade leaderboard numbers, but to communicate how the framework behaves during optimization, how quickly models converge, and how training and evaluation metrics evolve across epochs.
 
@@ -72,11 +75,95 @@ These plots track four core statistics after every epoch: training loss, test lo
 | `lenet_digits_loss.png` | Visualizes how train loss and test loss change after each epoch. |
 | `lenet_digits_accuracy.png` | Visualizes how train accuracy and test accuracy change after each epoch. |
 
+![LeNet Digits Loss](./projects/CNNS/plots/lenet_digits_loss.png)
 
-![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/projects/CNNS/plots/lenet_digits_accuracy.png)
+![LeNet Digits Accuracy](./projects/CNNS/plots/lenet_digits_accuracy.png)
 
-![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/projects/CNNS/plots/lenet_digits_loss.png)
+### MiniResNetDigits Benchmark Summary
 
+`projects/CNNS/mini_resnet_digits.py` trains a small residual CNN on NanoDigits for 10 epochs using the repository's `TensorDataset` and `Dataloader`. Like the other CNN benchmarks, it writes loss and accuracy curves after every epoch, and the script now also saves CSV and JSON benchmark outputs for future runs.
+
+| Benchmark | Dataset | Epochs | Metrics Tracked | Artifacts |
+| :--- | :--- | :---: | :--- | :--- |
+| MiniResNetDigits | NanoDigits | 10 | Train loss, test loss, train accuracy, test accuracy | `mini_resnet_digits_loss.png`, `mini_resnet_digits_accuracy.png` |
+
+### MiniResNetDigits Measured Results
+
+The current repository already contains `mini_resnet_digits_loss.png` and `mini_resnet_digits_accuracy.png`, but this run was generated before CSV and JSON exports were added to the script. The values below are therefore inferred from the saved plots and should be treated as approximate.
+
+| Statistic | Approximate Value |
+| :--- | :--- |
+| Train size | 1000 images |
+| Test size | 200 images |
+| Batch size | 32 |
+| Epochs | 10 |
+| Final train loss | ~0.10 |
+| Final test loss | ~0.10 |
+| Final train accuracy | ~97.0% |
+| Final test accuracy | ~97.0% |
+| Best train accuracy | ~97.0% at epochs 8-10 |
+| Best test accuracy | ~97.0% at epochs 9-10 |
+| Lowest train loss | ~0.09 at epoch 9 |
+| Lowest test loss | ~0.10 at epochs 7 and 10 |
+
+### MiniResNetDigits Epoch Trend
+
+The saved plots suggest the following approximate training trajectory.
+
+| Epoch | Train Loss | Test Loss | Train Acc | Test Acc |
+| :---: | :---: | :---: | :---: | :---: |
+| 1 | ~1.51 | ~0.79 | ~47.0% | ~74.0% |
+| 2 | ~0.47 | ~0.41 | ~84.5% | ~88.5% |
+| 3 | ~0.35 | ~0.30 | ~88.5% | ~90.5% |
+| 4 | ~0.27 | ~0.42 | ~92.0% | ~86.5% |
+| 5 | ~0.24 | ~0.45 | ~92.5% | ~86.0% |
+| 6 | ~0.18 | ~0.32 | ~93.5% | ~90.0% |
+| 7 | ~0.16 | ~0.14 | ~94.5% | ~94.5% |
+| 8 | ~0.10 | ~0.17 | ~97.0% | ~94.0% |
+| 9 | ~0.09 | ~0.13 | ~97.0% | ~96.5% |
+| 10 | ~0.10 | ~0.10 | ~97.0% | ~97.0% |
+
+### MiniResNetDigits Statistics Guide
+
+| Statistic | Source | Meaning |
+| :--- | :--- | :--- |
+| Train loss per epoch | `projects/CNNS/plots/mini_resnet_digits_loss.png` | Shows how quickly the residual network fits the NanoDigits training split. |
+| Test loss per epoch | `projects/CNNS/plots/mini_resnet_digits_loss.png` | Shows how well the model generalizes to held-out NanoDigits examples. |
+| Train accuracy per epoch | `projects/CNNS/plots/mini_resnet_digits_accuracy.png` | Measures how consistently the model predicts the correct digit on the training split. |
+| Test accuracy per epoch | `projects/CNNS/plots/mini_resnet_digits_accuracy.png` | Measures held-out classification accuracy after each epoch. |
+
+### MiniResNetDigits Benchmark Artifacts
+
+| Plot or File | Purpose |
+| :--- | :--- |
+| `mini_resnet_digits_loss.png` | Visualizes how train loss and test loss change after each epoch. |
+| `mini_resnet_digits_accuracy.png` | Visualizes how train accuracy and test accuracy change after each epoch. |
+| `mini_resnet_digits_metrics.csv` | Will store exact epoch-by-epoch benchmark values for future runs. |
+| `mini_resnet_digits_summary.json` | Will store the benchmark configuration and final metrics for future runs. |
+
+### Why MiniResNetDigits Converges Well
+
+| Observation | Likely Reason |
+| :--- | :--- |
+| Accuracy climbs above 90% within a few epochs | NanoDigits is a small, clean grayscale digit dataset, so even a modest residual CNN can learn useful features quickly. |
+| Test accuracy stays close to train accuracy | The dataset is simple enough that the model generalizes well without a large train-test gap. |
+| Loss drops sharply in the first two epochs | The stem convolution and first residual block learn digit strokes and local shapes very early in training. |
+| Test loss bumps around epochs 4-6 before improving again | The optimizer likely explores a sharper region before settling into a better basin later in training. |
+| Final metrics stabilize near 97% | The model has enough capacity to fit NanoDigits well, but the task is small enough that returns flatten quickly after convergence. |
+
+### How To Improve MiniResNetDigits Performance
+
+| Improvement | Expected Benefit |
+| :--- | :--- |
+| Save and compare multiple benchmark runs | Helps separate true model quality from random initialization noise. |
+| Add lightweight augmentation such as small shifts | Can improve robustness without making the benchmark much slower on CPU. |
+| Tune the SGD learning rate around `0.01` to `0.03` | May reduce the mid-training validation wobble and improve final stability. |
+| Replace the dense head with global average pooling once supported cleanly | Would make the residual design closer to standard ResNet practice and reduce head parameters. |
+| Vectorize `Conv2d` and `MaxPool2d` | Would lower CPU cost and make longer or repeated benchmarks more practical. |
+
+![Mini ResNet Digits Loss](./projects/CNNS/plots/mini_resnet_digits_loss.png)
+
+![Mini ResNet Digits Accuracy](./projects/CNNS/plots/mini_resnet_digits_accuracy.png)
 
 ### LeNetCIFAR Benchmark Summary
 
@@ -86,8 +173,6 @@ These plots track four core statistics after every epoch: training loss, test lo
 | :--- | :--- | :---: | :--- | :--- | :--- |
 | LeNetCIFAR | CIFAR-10 | 10 | Train loss, test loss, train accuracy, test accuracy | Total training time | `lenet_cifar_loss.png`, `lenet_cifar_accuracy.png`, `lenet_cifar_metrics.csv`, `lenet_cifar_summary.json` |
 
-![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/projects/CNNS/plots/lenet_cifar_accuracy.png)
-![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/projects/CNNS/plots/lenet_cifar_loss.png)
 ### LeNetCIFAR Measured Results
 
 The following statistics come from the saved benchmark artifacts in `projects/CNNS/plots/lenet_cifar_metrics.csv` and `projects/CNNS/plots/lenet_cifar_summary.json`.
@@ -167,10 +252,6 @@ The following statistics come from the saved benchmark artifacts in `projects/CN
 | Save and compare multiple benchmark runs | Makes it easier to identify whether changes improve convergence or just add noise. |
 
 After running the benchmark, use the CSV and JSON files above as the authoritative source for the CIFAR statistics reported by the project.
-
-
-## Disclaimer
-The implementation is still ongoing, so the code in this repo is not fully complete.
 
 ## Collaboration
 I'm open for collaboration on this project and also in the future when I implement this project in either pure C or C++.
