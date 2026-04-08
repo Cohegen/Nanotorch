@@ -38,11 +38,65 @@ This repository intends to showcase the implementation of PyTorch, one of the mo
 | [transformers](./transformers) | Transformer architecture implementation. |
 | [optimization](./optimization) | Specialized optimization techniques and performance analyses. |
 | [nanotorch](./nanotorch) | Core library integration. |
+| [nanotorchvision](./nanotorchvision) | Vision model zoo, NanoDigits dataset helpers, and benchmark leaderboard tooling. |
 | [experiments](./experiments) | Pipeline tests and architectural experiments. |
 | [projects](./projects) | End-to-end applications and project examples. |
 
 ## Disclaimer
 The implementation is still ongoing, so the code in this repo is not fully complete.
+
+## NanoTorchVision
+`nanotorchvision/` is a lightweight vision companion package for this repository. It centralizes NanoDigits dataset loading, CPU-friendly image model definitions, and leaderboard generation from saved benchmark summaries.
+
+The first pass includes:
+- `MiniResNetDigits`
+- `AlexNetTinyDigits`
+- `MobileNetStyleTinyDigits`
+- `DenseNetTinyDigits`
+- `ViTTinyDigits` as an experimental tiny patch model
+- leaderboard helpers in `nanotorchvision.benchmarks`
+
+DenseNet support is now available through a small differentiable channel-concatenation path used by `DenseNetTinyDigits`.
+
+## Computer Vision Analysis
+The NanoDigits computer vision runs now have enough saved benchmark data to compare optimization behavior directly instead of relying on rough visual inspection alone. The summary below uses the saved CSV and JSON artifacts in `projects/CNNS/plots/`.
+
+### NanoDigits Model Comparison
+
+| Model | Parameters | Runtime | Final Train Acc | Final Test Acc | Best Test Acc | Final Test Loss |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| ViTTinyDigits | 2,474 | 15.08 s | 91.0% | 92.0% | 92.0% | 0.3021 |
+| AlexNetTinyDigits | 4,026 | 1189.86 s | 95.1% | 95.0% | 95.0% | 0.1511 |
+| DenseNetTinyDigits | 5,238 | 9215.34 s | 99.6% | 98.0% | 99.0% | 0.0491 |
+| MobileNetStyleTinyDigits | 8,706 | 3111.75 s | 90.9% | 91.5% | 97.5% | 0.3176 |
+
+### What The Numbers Suggest
+
+| Observation | Evidence | Interpretation |
+| :--- | :--- | :--- |
+| DenseNet gives the strongest peak accuracy | Best test accuracy reaches 99.0% with a 0.0356 lowest test loss | Dense feature reuse works well on NanoDigits and the model is expressive enough to fit the task very cleanly. |
+| ViT is the fastest model by a wide margin | 15.08 seconds total runtime with only 2,474 parameters | The tiny patch model is computationally cheap in this codebase and gives a strong speed-to-accuracy tradeoff even though its final accuracy is lower than the best CNNs. |
+| AlexNet is the most stable conventional CNN run in the saved artifacts | Test accuracy climbs to 95.0% and finishes at its peak with matching train/test accuracy | The optimization path is smoother than MobileNet and less aggressive than DenseNet, which makes it a good baseline for this dataset. |
+| MobileNet shows the largest late-training instability | Best test accuracy is 97.5% at epoch 8, but final test accuracy falls to 91.5% by epoch 10 | The current learning-rate and architecture combination is too volatile late in training, so the last checkpoint is materially worse than the best checkpoint. |
+| Parameter count is not the main driver of benchmark quality here | MobileNet has the most parameters yet underperforms DenseNet and AlexNet in final accuracy | In this educational implementation, training dynamics and architecture fit matter more than raw size on NanoDigits. |
+
+### Model-by-Model Reading
+
+| Model | Analysis |
+| :--- | :--- |
+| ViTTinyDigits | The model improves steadily every epoch without a collapse phase. It appears underpowered relative to the stronger CNNs, but it is dramatically faster and still reaches 92.0% test accuracy, which is a credible result for such a small transformer. |
+| AlexNetTinyDigits | This run looks balanced: the model starts slowly, then accelerates through the middle epochs and finishes with train and test accuracy aligned at about 95%. That small gap suggests good generalization and a clean optimization path. |
+| DenseNetTinyDigits | This is the strongest run in absolute terms. Test accuracy reaches 98.5% by epoch 3, peaks at 99.0% by epoch 7, and stays high through the remainder of training. The runtime cost is substantial because dense reuse increases convolution work in an implementation that still uses explicit Python loops. |
+| MobileNetStyleTinyDigits | The model learns quickly and reaches 97.5% test accuracy, but the run is not robust through the last two epochs. The jump in test loss to 0.7239 at epoch 9 and the drop in final train accuracy indicate optimizer instability rather than a simple capacity limit. |
+
+### Practical Takeaways
+
+| Goal | Best Current Choice | Reason |
+| :--- | :--- | :--- |
+| Best NanoDigits accuracy | DenseNetTinyDigits | Highest measured best test accuracy at 99.0%. |
+| Best speed | ViTTinyDigits | Fastest end-to-end runtime by a very large margin. |
+| Best balanced baseline | AlexNetTinyDigits | Strong final accuracy with a smooth and stable training curve. |
+| Most in need of tuning | MobileNetStyleTinyDigits | High mid-run quality, but weak final stability. |
 
 ## Benchmarks
 This benchmark guide documents representative training behavior for the educational models in NanoTorch. The goal is not to present production-grade leaderboard numbers, but to communicate how the framework behaves during optimization, how quickly models converge, and how training and evaluation metrics evolve across epochs.
