@@ -85,12 +85,12 @@ class Linear(Layer):
         #Xavier/Glorot intialization for stable gradients
         scale = np.sqrt(XAVIER_SCALE_FACTOR/ in_features)
         weight_data = np.random.randn(in_features,out_features)* scale
-        self.weight = Tensor(weight_data)
+        self.weight = Tensor(weight_data, requires_grad=True)
 
         #initializze bias to zeros of None
         if bias:
             bias_data = np.zeros(out_features)
-            self.bias = Tensor(bias_data)
+            self.bias = Tensor(bias_data, requires_grad=True)
         else:
             self.bias = None
 

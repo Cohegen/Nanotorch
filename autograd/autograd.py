@@ -535,6 +535,49 @@ class SumBackward(Function):
             return np.ones_like(tensor.data) * grad_output,
         return None,
 
+class MeanBackward(Function):
+    """
+    Gradient computation for tensor mean.
+
+    Mean is sum divided by the number of reduced elements, so the backward
+    broadcasts the upstream gradient and scales it by 1 / element_count.
+    """
+
+    def __init__(self, tensor, axis=None, keepdims=False):
+        super().__init__(tensor)
+        self.axis = axis
+        self.keepdims = keepdims
+
+    def apply(self, grad_output):
+        tensor, = self.saved_tensors
+
+        if not (isinstance(tensor, Tensor) and tensor.requires_grad):
+            return (None,)
+
+        grad = np.asarray(grad_output, dtype=np.float32)
+        input_shape = tensor.data.shape
+
+        if self.axis is None:
+            count = tensor.data.size
+            expanded = np.broadcast_to(grad, input_shape)
+        else:
+            axes = self.axis
+            if not isinstance(axes, tuple):
+                axes = (axes,)
+            axes = tuple(ax if ax >= 0 else ax + len(input_shape) for ax in axes)
+
+            count = 1
+            for ax in axes:
+                count *= input_shape[ax]
+
+            if not self.keepdims:
+                for ax in sorted(axes):
+                    grad = np.expand_dims(grad, axis=ax)
+
+            expanded = np.broadcast_to(grad, input_shape)
+
+        return (expanded / count,)
+
 class ReLUBackward(Function):
     """
     Gradient computation for ReLU activation.
@@ -1076,6 +1119,25 @@ def enable_autograd(quiet=False):
 
         return result 
 
+    def mean_op(self,axis=None,keepdims=False):
+        """
+        Mean operation with gradient tracking.
+
+        Builds a reduction node that routes gradients back to the input and
+        scales them by the number of reduced elements.
+        """
+        _ensure_grad_attrs(self)
+
+        result_data = np.mean(self.data,axis=axis,keepdims=keepdims)
+        result = Tensor(result_data)
+        _ensure_grad_attrs(result)
+
+        if _get_requires_grad(self):
+            result.requires_grad = True
+            result._grad_fn = MeanBackward(self, axis=axis, keepdims=keepdims)
+
+        return result
+
     def backward(self,gradient=None):
         """
         Computes gradients via backpropagation.
@@ -1158,6 +1220,7 @@ def enable_autograd(quiet=False):
     Tensor.transpose = tracked_transpose 
     Tensor.reshape = tracked_reshape 
     Tensor.sum = sum_op 
+    Tensor.mean = mean_op
     Tensor.backward = backward 
     Tensor.zero_grad = zero_grad 
 

@@ -43,7 +43,7 @@ class Optimizer:
 
         #ensuring parameters participate in autograd once it is enabled
         for param in self.params:
-            if isinstance(params,Tensor):
+            if isinstance(param,Tensor):
                 param.requires_grad =True 
                 param.grad = None 
         self.step_count = 0 # for algorithms that need step counting
