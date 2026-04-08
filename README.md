@@ -16,8 +16,47 @@ NanoTorch pulls back the curtain. By stripping away the complexity and focusing 
 
 Whether you're a student trying to bridge the gap between theory and code, or an engineer looking to deepen your architectural understanding, NanoTorch is built to be read, tinkered with, and understood.
 
+## Why NanoTorch
+- Pure Python implementation of tensors, autograd, layers, optimizers, and training loops.
+- Built to expose the mechanics behind backpropagation instead of hiding them behind optimized kernels.
+- Covers both classical vision models and transformer-era components in one educational codebase.
+- Useful as a readable sandbox for debugging ideas, testing concepts, and learning system internals.
+
 ## Mission
 This repository intends to showcase the implementation of PyTorch, one of the most popular ML libraries, from scratch in pure Python.
+
+## Who It Is For
+- Students learning how gradients, layers, and optimizers work under the hood.
+- Engineers who want a compact reference implementation of core deep learning components.
+- Builders who want to experiment with model ideas in a transparent, hackable codebase.
+
+## Quick Start
+
+```powershell
+git clone https://github.com/Cohegen/NanoTorch.git
+cd NanoTorch
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install numpy matplotlib
+```
+
+Run a simple benchmark:
+
+```powershell
+python projects/CNNS/alexnet_digits.py
+```
+
+Generate the benchmark leaderboard:
+
+```powershell
+python projects/CNNS/generate_leaderboard.py
+```
+
+Run a focused gradient regression test:
+
+```powershell
+python -m pytest nanotorchvision/testing_densenet_gradients.py
+```
 
 ## Table of Contents
 
@@ -44,6 +83,24 @@ This repository intends to showcase the implementation of PyTorch, one of the mo
 
 ## Disclaimer
 The implementation is still ongoing, so the code in this repo is not fully complete.
+
+## Implementation Status
+
+| Status | Coverage |
+| :--- | :--- |
+| Implemented | Tensor operations, autograd, activations, losses, optimizers, dataloading, convolution, attention, embeddings, transformers, and benchmark tooling. |
+| Experimental | NanoTorchVision model zoo, ViT benchmark path, and several optimization analysis modules. |
+| Still Improving | Runtime performance, API consistency, vectorized kernels, and broader dataset coverage. |
+
+## How It Fits Together
+
+```text
+Tensor -> Autograd -> Layers -> Loss -> Optimizer -> Training Loop -> Benchmarks
+                     |                |
+                     +-> CNNs         +-> Metrics / Plots / Summaries
+                     +-> Attention
+                     +-> Transformers
+```
 
 ## NanoTorchVision
 `nanotorchvision/` is a lightweight vision companion package for this repository. It centralizes NanoDigits dataset loading, CPU-friendly image model definitions, and leaderboard generation from saved benchmark summaries.
