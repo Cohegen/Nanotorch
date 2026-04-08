@@ -158,6 +158,16 @@ The NanoDigits computer vision runs now have enough saved benchmark data to comp
 ## Benchmarks
 Benchmarks are meant to show how the framework behaves during training, not to act as a full leaderboard dump inside the top-level README.
 
+### NanoTorchVision Leaderboard
+
+| Rank | Model | Dataset | Params | Best Test Acc | Final Test Acc | Runtime (s) |
+| :---: | :--- | :--- | ---: | ---: | ---: | ---: |
+| 1 | densenet_tiny_digits | NanoDigits | 5238 | 99.0% | 98.0% | 9215.34 |
+| 2 | mobilenet_style_tiny_digits | NanoDigits | 8706 | 97.5% | 91.5% | 3111.75 |
+| 3 | alexnet_tiny_digits | NanoDigits | 4026 | 95.0% | 95.0% | 1189.86 |
+| 4 | vit_tiny_digits | NanoDigits | 2474 | 92.0% | 92.0% | 15.08 |
+| 5 | lenet_cifar | CIFAR-10 | - | 31.5% | 28.0% | 16329.06 |
+
 ### Vision Benchmarks
 
 | Model | Dataset | Best Test Acc | Notes |
@@ -182,6 +192,7 @@ Benchmarks are meant to show how the framework behaves during training, not to a
 - Vision plots and metrics: `projects/CNNS/plots/`
 - Vision package notes: `nanotorchvision/README.md`
 - Benchmark entry scripts: `projects/CNNS/`
+- Leaderboard generator: `projects/CNNS/generate_leaderboard.py`
 
 Use the CSV and JSON files in `projects/CNNS/plots/` as the authoritative source for exact benchmark values.
 
