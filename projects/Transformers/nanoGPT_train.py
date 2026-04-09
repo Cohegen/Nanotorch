@@ -24,11 +24,11 @@ enable_autograd(quiet=True)
 # Configuration
 batch_size = 16
 block_size = 32 # context length
-max_iters = 100
+max_iters = 200
 learning_rate = 1e-3
 device_type = 'cpu'
-eval_interval = 20
-eval_iters = 10
+eval_interval = 10
+eval_iters = 20
 
 # Model configuration
 config = GPTConfig(
