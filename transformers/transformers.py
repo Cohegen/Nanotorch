@@ -8,7 +8,7 @@ import numpy as np
 from activations.activations import GELU 
 from autograd.autograd import Function
 from embeddings.embeddings import EmbeddingLayer
-from layers.layers import Layer, Linear 
+from layers.layers import Layer, Linear, Parameter
 from Tensor import Tensor
 from attention.attention import MultiHeadAttention
 
@@ -100,11 +100,11 @@ class _LayerNormBackward(Function):
 
         return (grad_x,grad_gamma,grad_beta)
 
-class LayerNorm:
+class LayerNorm(Layer):
     """
     Layer Normalization for transformer blocks.
 
-    It normalizes across the feature dimension (lst axis) for each sample independently,
+    It normalizes across the feature dimension (last axis) for each sample independently,
 
     """
 
@@ -112,12 +112,13 @@ class LayerNorm:
         """
         Intializing LayerNorm with learnable parameters.
         """
+        super().__init__()
         self.normalized_shape = normalized_shape
         self.eps =eps 
 
         #Learnable parameters: scale and shift 
-        self.gamma = Tensor(np.ones(normalized_shape)) #scale parameter 
-        self.beta = Tensor(np.zeros(normalized_shape)) # shift parameter 
+        self.gamma = Parameter(np.ones(normalized_shape)) #scale parameter 
+        self.beta = Parameter(np.zeros(normalized_shape)) # shift parameter 
 
     
     def forward(self,x):
@@ -162,7 +163,7 @@ class LayerNorm:
         return [self.gamma,self.beta]
 
 
-class MLP:
+class MLP(Layer):
     """
     Multi-Layer Perceptron (FFN) for transformer blocks.
 
@@ -172,13 +173,8 @@ class MLP:
     def __init__(self,embed_dim,hidden_dim=None,dropout_prob=0.1):
         """
         Initialize MLP with two linear layer
-
-        EXAMPLE:
-        >>> mlp = MLP(512)  # Will create 512 -> 2048 -> 512 network
-        >>> x = Tensor(np.random.randn(2, 10, 512))
-        >>> output = mlp.forward(x)
-        >>> assert output.shape == (2, 10, 512)
         """
+        super().__init__()
         if hidden_dim is None:
             hidden_dim = 4* embed_dim # standard 4x expansion
 
@@ -193,9 +189,6 @@ class MLP:
     def forward(self,x):
         """
         Forward pass through MLP
-
-         COMPUTATION FLOW:
-        x -> Linear -> GELU -> Linear -> output
         """
         #first linear layer with expansion
         hidden = self.linear1.forward(x)
@@ -208,36 +201,15 @@ class MLP:
 
         return output
 
-    def __call__(self,x):
-        """Allows the MLP to be called like a function (forward pass)."""
-        return self.forward(x)
-
-    def parameters(self):
-        """Returns all learnable parameters."""
-        params = []
-        params.extend(self.linear1.parameters())
-        params.extend(self.linear2.parameters())
-        return params
-
-class TransformerBlock:
+class TransformerBlock(Layer):
     """
     Complete Transformer Block with self-attention, MLP and residual connections
     """
-    def __init__(self,embed_dim,num_heads,mlp_ratio=4,ff_dim=None,droout_prob=0.1):
+    def __init__(self,embed_dim,num_heads,mlp_ratio=4,ff_dim=None,dropout_prob=0.1):
         """
         Intializes a complete transformer block
-
-         TRANSFORMER BLOCK ARCHITECTURE:
-        x → LayerNorm → MultiHeadAttention → + (residual) →
-            LayerNorm → MLP → + (residual) → output
-
-        
-         EXAMPLE:
-        >>> block = TransformerBlock(embed_dim=512, num_heads=8)
-        >>> x = Tensor(np.random.randn(2, 10, 512))  # (batch, seq, embed)
-        >>> output = block.forward(x)
-        >>> assert output.shape == (2, 10, 512)
         """
+        super().__init__()
         self.embed_dim = embed_dim 
         self.num_heads = num_heads
 
@@ -249,7 +221,6 @@ class TransformerBlock:
         self.layer_norm2 = LayerNorm(embed_dim) #before MLP
 
         #Feed-forward network
-        #support both mlp_ration and explicit ff_dim for backward compatibility
         if ff_dim is not None:
             hidden_dim = ff_dim
         else:
@@ -260,13 +231,6 @@ class TransformerBlock:
     def forward(self,x,mask=None):
         """
         Forward pass through transformer block
-
-        COMPUTATION FLOW:
-        x -> layer_norm1 -> +x -> layer_norm2 -> ml -> + -> output
-
-        RESIDUAL CONNECTIONS:
-        These are crucial for training deep networks- they allow gradients
-        to flow directly through the network during backpropagation
         """
         #first sub-layer: Multi-head self-attention with residual connection
         #pre-norm: LayerNorm before attention
@@ -275,7 +239,7 @@ class TransformerBlock:
         attention_out = self.attention.forward(normed1,mask)
 
         #residual connection
-        x = x+ attention_out
+        x = x + attention_out
 
         #second sub-layer :MLP with residual connection
         #pre-norm:LayerNorm before MLP
@@ -287,26 +251,7 @@ class TransformerBlock:
 
         return output 
 
-    def __call__(self,x,mask=None):
-        """
-        Allows the transformer block to called like a function
-        """
-        return self.forward(x,mask)
-
-
-    def parameters(self):
-        """
-        Return all learnable parameters
-        """
-        params = []
-        params.extend(self.attention.parameters())
-        params.extend(self.layer_norm1.parameters())
-        params.extend(self.layer_norm2.parameters())
-        params.extend(self.mlp.parameters())
-
-        return params 
-
-class GPT:
+class GPT(Layer):
     """
     Compplete GPT(Generative Pre-Trained Transformer) Model
 
@@ -315,18 +260,8 @@ class GPT:
     def __init__(self,vocab_size,embed_dim,num_layers,num_heads,max_seq_len=1024):
         """
         Intializes the Complete GPT model
-
-
-        GPT ARCHITECTURE:
-        tokens → embedding → + pos_embedding →
-                transformer_blocks → layer_norm → lm_head → logits
-
-        EXAMPLE:
-        >>> model = GPT(vocab_size=1000, embed_dim=256, num_layers=6, num_heads=8)
-        >>> tokens = Tensor(np.random.randint(0, 1000, (2, 10)))  # (batch, seq)
-        >>> logits = model.forward(tokens)
-        >>> assert logits.shape == (2, 10, 1000)  # (batch, seq, vocab)
         """
+        super().__init__()
         self.vocab_size = vocab_size 
         self.embed_dim = embed_dim 
         self.num_layers = num_layers 
@@ -337,10 +272,7 @@ class GPT:
         self.embedding_layer = EmbeddingLayer(vocab_size,embed_dim,max_seq_len)
 
         #stack of transformer blocks
-        self.blocks = []
-        for _ in range(num_layers):
-            block = TransformerBlock(embed_dim,num_heads)
-            self.blocks.append(block)
+        self.blocks = Sequential(*[TransformerBlock(embed_dim,num_heads) for _ in range(num_layers)])
 
         #final layer normalization
         self.layer_norm_final = LayerNorm(embed_dim)
@@ -351,12 +283,6 @@ class GPT:
     def forward(self,tokens):
         """
         Forward pass through GPT model
-
-
-        COMPUTATATION FLOW:
-        tokens -> embed + pos_embed -> blocks-> layer_norm_final ->lang_modelling -> logits
-
-       
         """
         batch_size,seq_len = tokens.shape 
 
@@ -367,8 +293,7 @@ class GPT:
         mask = self._create_causal_mask(seq_len) 
 
         #passing through transformer blocks
-        for block in self.blocks:
-            x = block.forward(x,mask)
+        x = self.blocks.forward(x,mask)
 
         #final layer normalization
         x = self.layer_norm_final.forward(x)
@@ -376,13 +301,7 @@ class GPT:
         #language moddelling head 
         logits = self.lang_modelling.forward(x)
 
-        return logits 
-
-    def __call__(self,tokens):
-        """
-        Allows GPT model to be called like a function
-        """
-        return self.forward(tokens)
+        return logits
 
     def _create_causal_mask(self,seq_len):
         """

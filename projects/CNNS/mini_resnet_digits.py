@@ -1,5 +1,6 @@
 import sys
 import pickle
+import time
 from pathlib import Path
 
 import numpy as np
@@ -225,6 +226,8 @@ def main(epochs=10, batch_size=32, learning_rate=0.02, momentum=0.9):
     )
     print(f"Saving plots to: {plot_dir}")
 
+    training_start = time.perf_counter()
+
     for epoch in range(epochs):
         train_loader = make_loader(
             train_images,
@@ -265,13 +268,18 @@ def main(epochs=10, batch_size=32, learning_rate=0.02, momentum=0.9):
             f"test_loss={test_loss:.4f} test_acc={test_acc:.3f}"
         )
 
+    total_training_time_seconds = time.perf_counter() - training_start
     summary = {
+        "model_name": "mini_resnet_digits",
+        "benchmark": "MiniResNetDigits",
+        "dataset": "NanoDigits",
         "train_size": int(train_images.shape[0]),
         "test_size": int(test_images.shape[0]),
         "batch_size": int(batch_size),
         "epochs": int(epochs),
         "learning_rate": float(learning_rate),
         "momentum": float(momentum),
+        "total_training_time_seconds": float(total_training_time_seconds),
         "final_train_loss": float(history["train_loss"][-1]),
         "final_test_loss": float(history["test_loss"][-1]),
         "final_train_acc": float(history["train_acc"][-1]),

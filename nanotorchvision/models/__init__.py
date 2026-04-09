@@ -5,6 +5,8 @@ from .common import count_parameters
 from .densenet import DenseNetTinyDigits
 from .mobilenet import MobileNetStyleTinyDigits
 from .resnet import MiniResNetDigits
+from .squeezenet import SqueezeNetTinyDigits
+from .vgg import VGGNetTinyDigits
 from .vit import ViTTinyDigits
 
 MODEL_REGISTRY = {
@@ -12,6 +14,8 @@ MODEL_REGISTRY = {
     "densenet_tiny_digits": DenseNetTinyDigits,
     "mobilenet_style_tiny_digits": MobileNetStyleTinyDigits,
     "mini_resnet_digits": MiniResNetDigits,
+    "squeezenet_tiny_digits": SqueezeNetTinyDigits,
+    "vggnet_tiny_digits": VGGNetTinyDigits,
     "vit_tiny_digits": ViTTinyDigits,
 }
 
@@ -22,5 +26,7 @@ __all__ = [
     "MiniResNetDigits",
     "MobileNetStyleTinyDigits",
     "MODEL_REGISTRY",
+    "SqueezeNetTinyDigits",
+    "VGGNetTinyDigits",
     "ViTTinyDigits",
 ]

@@ -1,0 +1,6 @@
+rank,model_name,dataset,epochs,batch_size,parameter_count,best_test_acc,final_test_acc,final_test_loss,runtime_seconds,train_size,test_size,summary_path
+1,densenet_tiny_digits,NanoDigits,10,32,5238,0.99,0.98,0.04906622755341232,9215.336902800016,1000,200,C:\Users\HP 840 G3\OneDrive\Desktop\NanoTorch\projects\CNNS\plots\densenet_tiny_digits_summary.json
+2,mobilenet_style_tiny_digits,NanoDigits,10,32,8706,0.975,0.915,0.31760415971279143,3111.7526538000093,1000,200,C:\Users\HP 840 G3\OneDrive\Desktop\NanoTorch\projects\CNNS\plots\mobilenet_style_tiny_digits_summary.json
+3,alexnet_tiny_digits,NanoDigits,10,32,4026,0.95,0.95,0.15111825466156006,1189.8583126000012,1000,200,C:\Users\HP 840 G3\OneDrive\Desktop\NanoTorch\projects\CNNS\plots\alexnet_tiny_digits_summary.json
+4,vit_tiny_digits,NanoDigits,10,32,2474,0.92,0.92,0.302139505147934,15.078701200021897,1000,200,C:\Users\HP 840 G3\OneDrive\Desktop\NanoTorch\projects\CNNS\plots\vit_tiny_digits_summary.json
+5,lenet_cifar,CIFAR-10,10,8,,0.28,0.28,1.9288362789154052,16329.061695299984,,,C:\Users\HP 840 G3\OneDrive\Desktop\NanoTorch\projects\CNNS\plots\lenet_cifar_summary.json

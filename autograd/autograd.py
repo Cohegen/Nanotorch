@@ -8,6 +8,29 @@ from Tensor.tensor import Tensor
 #Constants for small numerical differentiation
 EPILSON = 1e-7
 
+_grad_enabled = True
+
+class no_grad:
+    """
+    Context manager and decorator to disable gradient tracking.
+    """
+    def __enter__(self):
+        global _grad_enabled
+        self.prev = _grad_enabled
+        _grad_enabled = False
+
+    def __exit__(self, *args):
+        global _grad_enabled
+        _grad_enabled = self.prev
+
+    def __call__(self, func):
+        import functools
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            with self:
+                return func(*args, **kwargs)
+        return wrapper
+
 class Function:
     """
     Base class for differentiable operations.
@@ -17,7 +40,7 @@ class Function:
 
     args:
         saved_tensors: stores inputs needed for backward pass
-    apply(): this method computes gradients using chain rule
+        apply(): this method computes gradients using chain rule
     """
 
     def __init__(self,*tensors):
@@ -868,6 +891,9 @@ def enable_autograd(quiet=False):
     -requires_grad=True enables tracking per tensor
 
     """
+    if getattr(Tensor, '_autograd_enabled', False):
+        return
+    
     ##adding gradient infrastructure to Tensor
     #store original __init__ to extend it
     _original_init = Tensor.__init__
@@ -917,10 +943,10 @@ def enable_autograd(quiet=False):
         Enhances the original __add__ method to build computation graphs
         when requires_grad=True for any input.
         """
-        #ensure self has gradient attributes
+        #ensuring that self has gradient attributes
         _ensure_grad_attrs(self)
 
-        #convert scalr to Tensor if needed
+        #converts scalar to Tensor if needed
         if not isinstance(other,Tensor):
             other = Tensor(other)
         _ensure_grad_attrs(other)
@@ -930,7 +956,7 @@ def enable_autograd(quiet=False):
         _ensure_grad_attrs(result)
 
         #tracking gradient if needed
-        if _get_requires_grad(self) or _get_requires_grad(other):
+        if _grad_enabled and (_get_requires_grad(self) or _get_requires_grad(other)):
             result.requires_grad = True
             result._grad_fn = AddBackward(self,other)
 
@@ -958,7 +984,7 @@ def enable_autograd(quiet=False):
         _ensure_grad_attrs(result)
 
         # track gradient if needed
-        if _get_requires_grad(self) or _get_requires_grad(other_tensor):
+        if _grad_enabled and (_get_requires_grad(self) or _get_requires_grad(other_tensor)):
             result.requires_grad = True
             result._grad_fn = MulBackward(self,other)
 
@@ -979,7 +1005,7 @@ def enable_autograd(quiet=False):
         _ensure_grad_attrs(result)
 
         #track gradients if needed
-        if _get_requires_grad(self) or _get_requires_grad(other):
+        if _grad_enabled and (_get_requires_grad(self) or _get_requires_grad(other)):
             result.requires_grad = True 
             result._grad_fn = MatMulBackward(self,other)
 
@@ -1000,7 +1026,7 @@ def enable_autograd(quiet=False):
         _ensure_grad_attrs(result)
 
         #track gradient if needed
-        if _get_requires_grad(self):
+        if _grad_enabled and _get_requires_grad(self):
             result.requires_grad =True
             result._grad_fn = TransposeBackward(self,dim0,dim1)
 
@@ -1023,7 +1049,7 @@ def enable_autograd(quiet=False):
         _ensure_grad_attrs(result)
 
         #track gradient if needed
-        if _get_requires_grad(self):
+        if _grad_enabled and _get_requires_grad(self):
             result.requires_grad = True 
             result._grad_fn = ReshapeBackward(self,original_shape)
 
@@ -1048,7 +1074,7 @@ def enable_autograd(quiet=False):
         _ensure_grad_attrs(result)
 
         #track gradient if needed
-        if _get_requires_grad(self) or _get_requires_grad(other):
+        if _grad_enabled and (_get_requires_grad(self) or _get_requires_grad(other)):
             result.requires_grad = True 
             result._grad_fn = SubBackward(self,other)
 
@@ -1074,7 +1100,7 @@ def enable_autograd(quiet=False):
         _ensure_grad_attrs(result)
 
         #track gradient if needed
-        if _get_requires_grad(self) or _get_requires_grad(other):
+        if _grad_enabled and (_get_requires_grad(self) or _get_requires_grad(other)):
             result.requires_grad = True
             result._grad_fn = DivBackward(self,other)
         
@@ -1095,7 +1121,7 @@ def enable_autograd(quiet=False):
         _ensure_grad_attrs(result)
 
         #tracking gradients if needed
-        if _get_requires_grad(self):
+        if _grad_enabled and _get_requires_grad(self):
             result.requires_grad = True 
             result._grad_fn = SliceBackward(self,key)
 
@@ -1113,7 +1139,7 @@ def enable_autograd(quiet=False):
         result_data = np.sum(self.data,axis=axis,keepdims=keepdims)
         result = Tensor(result_data)
 
-        if _get_requires_grad(self):
+        if _grad_enabled and _get_requires_grad(self):
             result.requires_grad=True
             result._grad_fn = SumBackward(self)
 
@@ -1132,7 +1158,7 @@ def enable_autograd(quiet=False):
         result = Tensor(result_data)
         _ensure_grad_attrs(result)
 
-        if _get_requires_grad(self):
+        if _grad_enabled and _get_requires_grad(self):
             result.requires_grad = True
             result._grad_fn = MeanBackward(self, axis=axis, keepdims=keepdims)
 
@@ -1223,6 +1249,7 @@ def enable_autograd(quiet=False):
     Tensor.mean = mean_op
     Tensor.backward = backward 
     Tensor.zero_grad = zero_grad 
+    Tensor.no_grad = no_grad
 
     #patch activations and losses to track gradients
     try:

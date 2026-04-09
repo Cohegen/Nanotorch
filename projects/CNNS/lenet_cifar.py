@@ -273,6 +273,7 @@ def main(
 
     total_training_time_seconds = time.perf_counter() - training_start
     summary = {
+        "model_name": "lenet_cifar",
         "benchmark": "LeNetCIFAR",
         "dataset": "CIFAR-10",
         "epochs": epochs,

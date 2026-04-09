@@ -5,7 +5,7 @@ from autograd.autograd import Function
 
 
 class _ConcatBackward(Function):
-    """Route gradients from a concatenated tensor back to each input slice."""
+    """Routes gradients from a concatenated tensor back to each input slice."""
 
     def __init__(self, tensors, axis):
         super().__init__(*tensors)
@@ -29,7 +29,7 @@ class _ConcatBackward(Function):
 
 
 def mark_parameters_trainable(parameters):
-    """Ensure parameters participate in optimization in this codebase."""
+    """Ensuring parameters participate in optimization in this codebase."""
     for param in parameters:
         param.requires_grad = True
         param.grad = None

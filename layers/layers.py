@@ -27,94 +27,126 @@ Here we implement two essential layers
 class Layer:
     """
     Base class for all neural network layers.
-
-    All layers should inherit from this class and implement
-      -forward(x): computes layer output
-      -parameters(): returns list of trainable parameters
-
-    The __call__ method is provided to make layers callable.
     """
+    def __init__(self):
+        self.training = True
+        self._parameters = {}
+        self._buffers = {}
+        self._modules = {}
 
-    def forward(self,x):
-        """
-        Forward pass through layer.
+    def __setattr__(self, name, value):
+        if isinstance(value, Tensor):
+            if getattr(value, 'requires_grad', False):
+                self._parameters[name] = value
+            else:
+                self._buffers[name] = value
+        elif isinstance(value, Layer):
+            self._modules[name] = value
+        super().__setattr__(name, value)
 
-        Args:
-          x: Inpuy tensor
+    def train(self, mode=True):
+        """Sets the layer to training mode."""
+        self.training = mode
+        for module in self._modules.values():
+            module.train(mode)
 
-        Returns:
-          Output tensor after transformation
-        """
-        raise NotImplementedError("Subclasses must implement forward()")
+    def eval(self):
+        """Sets the layer to evaluation mode."""
+        return self.train(False)
 
-    def __call__(self,x,*args,**kwargs):
-        """Allows layer to be called like a function."""
-        return self.forward(x,*args,**kwargs)
+    def register_buffer(self, name, tensor):
+        """Adds a buffer to the module."""
+        if not isinstance(tensor, Tensor):
+            tensor = Tensor(tensor)
+        self._buffers[name] = tensor
+        setattr(self, name, tensor)
+
+    def apply(self, fn):
+        """Applies a function recursively to every submodule."""
+        for module in self._modules.values():
+            module.apply(fn)
+        fn(self)
+        return self
 
     def parameters(self):
         """
-        Return list of trainable parameters.
-
-        Returns:
-
-           List of Tensor objects (weights and biases)
+        Return list of all trainable parameters, including those of submodules.
         """
+        params = list(self._parameters.values())
+        for module in self._modules.values():
+            params.extend(module.parameters())
+        return params
 
-        return [] #base class has no parameters
+    def named_parameters(self, prefix=''):
+        """Returns an iterator over module parameters, yielding both the name and the parameter."""
+        for name, param in self._parameters.items():
+            yield prefix + ('.' if prefix else '') + name, param
+        for name, module in self._modules.items():
+            yield from module.named_parameters(prefix + ('.' if prefix else '') + name)
+
+    def forward(self, x):
+        raise NotImplementedError("Subclasses must implement forward()")
+
+    def __call__(self, x, *args, **kwargs):
+        return self.forward(x, *args, **kwargs)
+
+    def to(self, device):
+        """Move to device (only CPU supported in NanoTorch)"""
+        return self
 
     def __repr__(self):
-        """String representation of the layer."""
         return f"{self.__class__.__name__}()"
 
    
+class Parameter(Tensor):
+    """
+    A kind of Tensor that is to be considered a module parameter.
+    """
+    def __init__(self, data):
+        super().__init__(data, requires_grad=True)
+
 class Linear(Layer):
     """
-    Linear (fully connected) layer: y = xW +b
+    Linear (fully connected) layer: y = xW^T + b
 
-    This is the fundemental building block of neural networks.
-    Applies a linear transformation to incoming data
+    This matches PyTorch's implementation where weights are (out_features, in_features).
     """   
 
     def __init__(self,in_features,out_features,bias=True):
         """
         Intializing linear layer with proper weight intialization
         """
+        super().__init__()
         self.in_features = in_features
         self.out_features = out_features
 
         #Xavier/Glorot intialization for stable gradients
         scale = np.sqrt(XAVIER_SCALE_FACTOR/ in_features)
-        weight_data = np.random.randn(in_features,out_features)* scale
-        self.weight = Tensor(weight_data, requires_grad=True)
+        # Weight shape is (out_features, in_features) to match PyTorch
+        weight_data = np.random.randn(out_features, in_features)* scale
+        self.weight = Parameter(weight_data)
 
         #initializze bias to zeros of None
         if bias:
             bias_data = np.zeros(out_features)
-            self.bias = Tensor(bias_data, requires_grad=True)
+            self.bias = Parameter(bias_data)
         else:
             self.bias = None
 
 
     def forward(self,x):
         """
-        Forward pass through linear layer.
+        Forward pass through linear layer: y = x @ W.T + b
         """
-
-        #linear transformation y=Wx
-        output = x.matmul(self.weight)
+        # linear transformation y = x @ W.T
+        # self.weight is (out, in), so self.weight.transpose() is (in, out)
+        output = x.matmul(self.weight.transpose(-2, -1))
 
         ##add bias if present
         if self.bias is not None:
             output = output + self.bias 
 
         return output
-
-    def parameters(self):
-        """Return list of trainable parameters."""
-        params = [self.weight]
-        if self.bias is not None:
-            params.append(self.bias)
-        return params 
 
     def __repr__(self):
         """String representation for debugging"""
@@ -136,16 +168,17 @@ class Dropout(Layer):
         """
         Initializing dropout layer.
         """
+        super().__init__()
         if not DROPOUT_MIN_PROB <= p <= DROPOUT_MAX_PROB:
             raise ValueError(f"Dropout probability must be between {DROPOUT_MIN_PROB} and {DROPOUT_MAX_PROB}, got {p}")
 
         self.p = p
 
-    def forward(self,x,training=True):
+    def forward(self,x):
         """
         Forward pass through dropout layer.
         """
-        if not training or self.p == DROPOUT_MIN_PROB:
+        if not self.training or self.p == DROPOUT_MIN_PROB:
             #during inference or no dropoout, pass through unchange
             return x
         if self.p ==DROPOUT_MAX_PROB:
@@ -166,14 +199,6 @@ class Dropout(Layer):
         output = x*mask_tensor*scale
         return output
 
-    def __call__(self,x,training=True):
-        """Allows the layer to be called like a function"""
-        return self.forward(x,training)
-
-    def parameters(self):
-        """Dropout has no parameters. """
-        return []
-
     def __repr__(self):
         return f"Dropout(p={self.p})"
 
@@ -190,11 +215,29 @@ class Sequential:
             self.layers =list(layers[0])
         else:
             self.layers = list(layers)
+        self.training = True
+
+    def train(self):
+        """Sets all layers to training mode."""
+        self.training = True
+        for layer in self.layers:
+            if hasattr(layer, 'train'):
+                layer.train()
+
+    def eval(self):
+        """Sets all layers to evaluation mode."""
+        self.training = False
+        for layer in self.layers:
+            if hasattr(layer, 'eval'):
+                layer.eval()
 
     def forward(self,x):
         """Forward pass through all layers sequentially."""
         for layer in self.layers:
-            x = layer.forward(x)
+            if isinstance(layer, Dropout):
+                x = layer.forward(x, training=self.training)
+            else:
+                x = layer.forward(x)
         return x
 
     def __call__(self,x):

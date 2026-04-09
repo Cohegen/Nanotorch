@@ -14,18 +14,82 @@ MB_TO_BYTES = 1024*1024
 
 #class the performs the core ML operations
 class Tensor():
-    def __init__(self,data):
+    def __init__(self,data, requires_grad=False):
         """Creating a new tensor from data"""
 
         #1.Converting data to Numpy array with dtype=float32
+        # Handle list of tensors
+        if isinstance(data, (list, tuple)) and len(data) > 0 and isinstance(data[0], Tensor):
+            data = [t.data if isinstance(t, Tensor) else t for t in data]
+        elif isinstance(data, Tensor):
+            requires_grad = data.requires_grad or requires_grad
+            data = data.data
+
         self.data = np.array(data,dtype=np.float32)
         #2. Setting self.shape from the array's shape
         self.shape = self.data.shape
-        #3. Setting self.size from the array's size
-        self.size = self.data.size
+        #3. Setting self.size_val from the array's size (renamed from size to not conflict with size())
+        self.size_val = self.data.size
         #4. Setting self.dtype from the array's size
         self.dtype= self.data.dtype
+        
+        self.requires_grad = requires_grad
+        self.grad = None
+        self._grad_fn = None
+        self.device = "cpu"
 
+    @property
+    def num_elements(self):
+        """Returns the total number of elements in the tensor"""
+        return self.size_val
+
+    def size(self, dim=None):
+        """Returns the size of the tensor along a given dimension"""
+        if dim is None:
+            return self.shape
+        return self.shape[dim]
+
+    def view(self, *shape):
+        """Alias for reshape to match PyTorch API"""
+        return self.reshape(*shape)
+
+    def contiguous(self):
+        """Returns the tensor itself (since we're always using NumPy arrays)"""
+        return self
+
+    def split(self, split_size, dim=0):
+        """Splits the tensor into chunks along a given dimension"""
+        n = self.shape[dim]
+        num_splits = n // split_size
+        indices = [split_size * i for i in range(1, num_splits)]
+        splits = np.split(self.data, indices, axis=dim)
+        return [Tensor(s) for s in splits]
+
+    def masked_fill(self, mask, value):
+        """Fills elements of the tensor with value where mask is True"""
+        mask_data = mask.data if isinstance(mask, Tensor) else mask
+        # Using np.where handles broadcasting correctly
+        new_data = np.where(mask_data.astype(bool), value, self.data)
+        return Tensor(new_data)
+
+    def numel(self):
+        """Returns the total number of elements in the tensor"""
+        return self.size_val
+
+    @property
+    def ndim(self):
+        """Returns the number of dimensions"""
+        return self.data.ndim
+
+    def dim(self):
+        """Returns the number of dimensions (PyTorch style)"""
+        return self.ndim
+
+    def __array__(self, dtype=None):
+        """Allowing NumPy to treat Tensor as an array-like object"""
+        if dtype:
+            return self.data.astype(dtype)
+        return self.data
 
     def __repr__(self):
         """String representation of a tensor for debugging"""
@@ -39,9 +103,39 @@ class Tensor():
         """Return the underlying Numpy array"""
         return self.data
 
-    def memory_footprint(self):
-        """Calculates exact memory usage in bytes"""
-        return self.data.nbytes
+    def tolist(self):
+        """Return the tensor data as a list"""
+        return self.data.tolist()
+
+    def __len__(self):
+        """Returns the length of the first dimension of the tensor"""
+        if len(self.shape) == 0:
+            return 1
+        return self.shape[0]
+
+    def __eq__(self, other):
+        other_data = other.data if isinstance(other, Tensor) else other
+        return Tensor(self.data == other_data)
+
+    def __lt__(self, other):
+        other_data = other.data if isinstance(other, Tensor) else other
+        return Tensor(self.data < other_data)
+
+    def __gt__(self, other):
+        other_data = other.data if isinstance(other, Tensor) else other
+        return Tensor(self.data > other_data)
+
+    def __le__(self, other):
+        other_data = other.data if isinstance(other, Tensor) else other
+        return Tensor(self.data <= other_data)
+
+    def __ge__(self, other):
+        other_data = other.data if isinstance(other, Tensor) else other
+        return Tensor(self.data >= other_data)
+
+    def __ne__(self, other):
+        other_data = other.data if isinstance(other, Tensor) else other
+        return Tensor(self.data != other_data)
 
     def __add__(self,other):
         """Add two tensors element-wise with broadcasting supporting"""
@@ -141,22 +235,22 @@ class Tensor():
         else:
             new_shape = shape
         if -1 in new_shape:
-            if new_shape.count(1) > 1:
+            if list(new_shape).count(-1) > 1:
                 raise ValueError("Can only specify one unknown dimension with -1")
             known_size=1
             unknown_idx = new_shape.index(-1)
             for i,dim in enumerate(new_shape):
                 if i != unknown_idx:
                     known_size *= dim
-            unknown_dim = self.size // known_size
+            unknown_dim = self.size_val // known_size
             new_shape = list(new_shape)
             new_shape[unknown_idx] = unknown_dim
             new_shape = tuple(new_shape)
 
-        if np.prod(new_shape) != self.size:
+        if np.prod(new_shape) != self.size_val:
             target_size = int(np.prod(new_shape))
             raise ValueError(
-                f"Total elements must match: {self.size} not equal to {target_size}"
+                f"Total elements must match: {self.size_val} not equal to {target_size}"
 
             )
         reshaped_data =np.reshape(self.data,new_shape)
@@ -211,7 +305,7 @@ def  tensor_creation():
     scalar = Tensor(5.0)
     assert scalar.data == 5.0
     assert scalar.shape == ()
-    assert scalar.size == 1 
+    assert scalar.num_elements == 1 
     assert scalar.dtype == np.float32
 
     #testing vector creation
@@ -219,19 +313,19 @@ def  tensor_creation():
     vector = Tensor([1,2,3])
     assert np.array_equal(vector.data,np.array([1,2,3],dtype=np.float32))
     assert vector.shape == (3,)
-    assert vector.size == 3
+    assert vector.num_elements == 3
 
 
     ##testing matrix creation
     matrix = Tensor([[1,2],[3,5]])
     assert np.array_equal(matrix.data,np.array([[1,2],[3,5]],dtype=np.float32))
     assert matrix.shape == (2,2)
-    assert matrix.size == 4
+    assert matrix.num_elements == 4
 
     #test 3D tensor creation
     tensor_3d = Tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
     assert tensor_3d.shape == (2,2,2)
-    assert tensor_3d.size == 8
+    assert tensor_3d.num_elements == 8
 
     print("Tensor creation works correctly")
 

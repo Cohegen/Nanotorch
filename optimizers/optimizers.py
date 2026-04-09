@@ -24,310 +24,149 @@ DEFAULT_WEIGHT_DECAY_ADAMW = 0.01 #default weight decay for AdamW
 class Optimizer:
     """
     Base class for all optimizers.
-
-    This class defines the common interface that all optimizers must implement:
-    -zero_grad(): clears gradients from parameters
-    - step(): updates parameters based on gradients
     """
-    def __init__(self,params:List[Tensor]):
-        """
-        Initializes optimizer with parameters to optimize.
+    def __init__(self, params, defaults):
+        self.defaults = defaults
+        self.state = {}
+        self.param_groups = []
 
-        """
-        #validating and storing parameters
-        if not isinstance(params,list):
-            params = list(params)
+        param_groups = list(params)
+        if len(param_groups) == 0:
+            raise ValueError("optimizer got an empty parameter list")
+        if not isinstance(param_groups[0], dict):
+            param_groups = [{'params': param_groups}]
 
-        #store parameters
-        self.params = params 
+        for param_group in param_groups:
+            self.add_param_group(param_group)
+        
+        self.step_count = 0
 
-        #ensuring parameters participate in autograd once it is enabled
-        for param in self.params:
-            if isinstance(param,Tensor):
-                param.requires_grad =True 
-                param.grad = None 
-        self.step_count = 0 # for algorithms that need step counting
+    def add_param_group(self, param_group):
+        assert isinstance(param_group, dict), "param_group must be a dict"
+        params = param_group['params']
+        if isinstance(params, Tensor):
+            param_group['params'] = [params]
+        elif not isinstance(params, list):
+            param_group['params'] = list(params)
+        
+        for name, default in self.defaults.items():
+            param_group.setdefault(name, default)
+        
+        self.param_groups.append(param_group)
 
     def zero_grad(self):
-        """
-        Clears gradients from all parameters
-
-        """
-        ##iterating through all params
-        for param in self.params:
-            param.grad = None 
+        for group in self.param_groups:
+            for p in group['params']:
+                p.grad = None
 
     def step(self):
-        """
-        Update parameters based on gradients
-
-        This is abstract i.e each optimizer implements its own updatw rule 
-
-        """
-        raise NotImplementedError(
-            f"Abstract method step() not implemented\n"
-            f" Wrong {self.__class__.__name__} inherits from Optimizer but doesn't define step()\n"
-            f"   Each optimizer must implement its won update rule (SGD,Adam,etc)\n"
-            f"Override step() in your optimizer subclass:\n"
-            f"    def step(self):\n"
-            f"         for param in self.params:\n"
-            f"                if param.grad is not None:\n"
-            f"                          param.grad -= self.lr * param.grad.data"
-        )
+        raise NotImplementedError()
 
 class SGD(Optimizer):
-    """
-    Stochastic Gradient Descent with momentum.
+    def __init__(self, params, lr=DEFAULT_LEARNING_RATE_SGD, momentum=0, weight_decay=0):
+        defaults = dict(lr=lr, momentum=momentum, weight_decay=weight_decay)
+        super().__init__(params, defaults)
 
-    SGD is the foundation optimization algortim that moves parameters
-    in the direction opposite to gradient. With momentum, it remember
-    previous updates to reduce oscillations and accelerate convergence.
-    """
-
-    def __init__(self,params:List[Tensor],lr:float = DEFAULT_LEARNING_RATE_SGD,momentum: float = 0.0,weight_decay:float=0.0):
-        """
-        Intialize SGD optimizer
-
-        """
-        ##calling parent constructor from Optimizer class
-        super().__init__(params)
-
-        self.lr =lr
-        self.momentum = momentum
-        self.weight_decay = weight_decay
-
-        #initializing momentum buffers
-        self.momentum_buffers = [None for _ in self.params]
-
-    def has_momentum(self) -> bool:
-        """
-        Check if this optimizer uses momentum.
-
-        This explicit API method replaces the need for hasattr checks
-        in checkpointing code
-
-        Returns:
-            bool: True if momentum is enabled i.e momentum >= 0, False otherwise
-        """
-        return self.momentum > 0
-
-    def get_momentum(self) -> Optional[List]:
-        """
-        Get momentum bufffers for checkpointing
-
-        This explicit API method provides safe access to momentum buffers
-        without using hasattr, making the API contract clear.
-
-        Return:
-            Optional[List]:List of momentum buffers if momentum is enabled
-                   None otherwise
-        """
-        if not self.has_momentum():
-            return None
-        return [buf.copy() if buf is not None else None for buf in self.momentum_buffers]
-
-    def set_momentum_state(self,state:Optional[List]) -> None:
-        """
-        Restore momentum buffers from checkpointing.
-
-        This explicit API method provides safe restoration of momentum state 
-        without using hasattr
-
-        Args:
-            state: List of momentum buffers or None
-        """
-
-        if state is None or not self.has_momentum():
-            return 
-        if len(state) != len(self.momentum_buffers):
-            raise ValueError(
-                f"Momentum state length mismatch\n"
-                f" Wrong!! State has {len(state)} buffers, but optimizers has {len(self.momentum_buffers)} parameters\n"
-                f"  Checkpoint was saved with a different model architecture or parameter count\n"
-                f"  Ensure you're loading state into an optimizwe with the same number of parameters:\n"
-                f"    Check parameter counts mathc before restoring\n"
-                f"   ssert len(saved_state) == len(optimizer.params)"
-
-            )
-
-            for i,buf in enumerate(state):
-                if buf is not None:
-                    self.momentum_buffers[i] = buf.copy()
-    
     def step(self):
-        """
-        Perform SGD update step with momentum
-        """
-        for i,param in enumerate(self.params):
-            if param.grad is None:
-                continue
+        self.step_count += 1
+        for group in self.param_groups:
+            weight_decay = group['weight_decay']
+            momentum = group['momentum']
+            lr = group['lr']
 
-            #Get gradient data - grad can be Tensor or numpy array
-            grad = param.grad 
-            #handle both Tensor (with.data) and numpy array(from autograd) cases 
-            if isinstance(grad,Tensor):
-                grad_data = grad.data 
-            else:
-                #grad is already a numpy array from autograd 
-                grad_data = grad
-
-            if self.weight_decay != 0:
-                grad_data = grad_data + self.weight_decay * param.data
-
-            #updating momentum buffer
-            if self.momentum !=0:
-                if self.momentum_buffers[i] is None:
-                    #initialize momentum buffer
-                    self.momentum_buffers[i] = np.zeros_like(param.data)
+            for i, p in enumerate(group['params']):
+                if p.grad is None:
+                    continue
                 
-                # Update momentum: v = momentum * v_prev + grad
-                self.momentum_buffers[i] = self.momentum * self.momentum_buffers[i] + grad_data
-                grad_data = self.momentum_buffers[i]
+                grad = p.grad.data if isinstance(p.grad, Tensor) else p.grad
 
-            #update parameters: params = param- lr* grad 
-            param.data = param.data - self.lr * grad_data 
+                if weight_decay != 0:
+                    grad = grad + weight_decay * p.data
 
-        self.step_count += 1 
+                if momentum != 0:
+                    state = self.state.get(id(p), {})
+                    if 'momentum_buffer' not in state:
+                        buf = state['momentum_buffer'] = np.zeros_like(p.data)
+                    else:
+                        buf = state['momentum_buffer']
+                    
+                    buf[:] = momentum * buf + grad
+                    grad = buf
+                    self.state[id(p)] = state
+
+                p.data = p.data - lr * grad
 
 class Adam(Optimizer):
-    """
-    Adam Optimizer with adaptive learning rates.
-
-    Adam computes individual adaptive learning rates for different parameters
-    from estimates of first and second moments of the gradients.
-    This makes it effective for problems with sparse gradients or noisy data.
-
-    """ 
-
-    def __init__(self,params:List[Tensor],lr:float=DEFAULT_LEARNING_RATE_ADAM,betas:tuple = (DEFAULT_BETA1,DEFAULT_BETA2),eps:float = DEFAULT_EPS,weight_decay:float =0.0):
-          """
-          Intialize Adam optimizer 
-
-          """
-          #calling parent constructor
-          super().__init__(params)
-
-          self.lr = lr 
-          self.beta1, self.beta2 = betas 
-          self.eps = eps 
-          self.weight_decay = weight_decay 
-
-          # intialize moment buffers
-          self.m_buffers = [None for _ in self.params] # first moment i.e mean
-          self.v_buffers = [None for _ in self.params] #second moment i.e variance
-
+    def __init__(self, params, lr=DEFAULT_LEARNING_RATE_ADAM, betas=(DEFAULT_BETA1, DEFAULT_BETA2), eps=DEFAULT_EPS, weight_decay=0):
+        defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
+        super().__init__(params, defaults)
 
     def step(self):
-        """
-        Perform Adam Update step.
-        """
         self.step_count += 1
+        for group in self.param_groups:
+            beta1, beta2 = group['betas']
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                
+                grad = p.grad.data if isinstance(p.grad, Tensor) else p.grad
+                if group['weight_decay'] != 0:
+                    grad = grad + group['weight_decay'] * p.data
 
-        for i,param in enumerate(self.params):
-            if param.grad is None:
-                continue 
+                state = self.state.get(id(p), {})
+                if len(state) == 0:
+                    state['step'] = 0
+                    state['exp_avg'] = np.zeros_like(p.data)
+                    state['exp_avg_sq'] = np.zeros_like(p.data)
 
+                exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
+                state['step'] += 1
 
-            #get gradient data i.egrad can be Tensor or numpy array
-            grad = param.grad 
-            #handles both Tensor (with .data) and numpy array(from autograd) cases
-            if isinstance(grad,Tensor):
-                grad_data = grad.data 
-            else:
-                #grad is already a numpy array from autograd 
-                grad_data = grad 
+                exp_avg[:] = beta1 * exp_avg + (1 - beta1) * grad
+                exp_avg_sq[:] = beta2 * exp_avg_sq + (1 - beta2) * (grad * grad)
 
-            #apply weight decay 
-            if self.weight_decay != 0:
-                grad_data = grad_data + self.weight_decay * param.data 
-
-            #intialize buffers if needed
-            if self.m_buffers[i] is None:
-                self.m_buffers[i] = np.zeros_like(param.data)
-                self.v_buffers[i] = np.zeros_like(param.data)
-
-            #update biased first moment estimate
-            self.m_buffers[i] = self.beta1 * self.m_buffers[i] + (1- self.beta1)*grad_data 
-
-            #update biased second moment estimatw
-            self.v_buffers[i] = self.beta2 * self.v_buffers[i] + (1-self.beta2)* (grad_data **2 )
-
-            #compute bias correction
-            bias_correction1 = 1 -self.beta1 ** self.step_count
-            bias_correction2 = 1 - self.beta2 ** self.step_count
-
-            #compute bias-corrected moments
-            m_hat = self.m_buffers[i] / bias_correction1
-            v_hat = self.v_buffers[i] / bias_correction2
-
-            param.data= param.data - self.lr * m_hat / (np.sqrt(v_hat)+ self.eps)
-
+                bias_correction1 = 1 - beta1 ** state['step']
+                bias_correction2 = 1 - beta2 ** state['step']
+                
+                step_size = group['lr'] / bias_correction1
+                p.data -= step_size * exp_avg / (np.sqrt(exp_avg_sq / bias_correction2) + group['eps'])
+                self.state[id(p)] = state
 
 class AdamW(Optimizer):
-    """
-    AdamW optimizer with decoupled weight decay.
-
-    Adam fixes a bug in Adam's weight decay implementation by decoupling
-    weight decy from the gradient-based update. This leads to better regularization and
-    is preferred version for most application.
-    """
-    def __init__(self,params:List[Tensor],lr:float=DEFAULT_LEARNING_RATE_ADAM,betas:tuple=(DEFAULT_BETA1,DEFAULT_BETA2),eps:float = DEFAULT_EPS,weight_decay:float = DEFAULT_WEIGHT_DECAY_ADAMW):
-        """
-        Intialize AdamW optimizer
-
-        """
-        super().__init__(params)
-
-        self.lr =lr 
-        self.beta1,self.beta2= betas
-        self.eps =eps
-        self.weight_decay = weight_decay
-
-        #intialize moment buffers 
-        self.m_buffers = [None for _ in self.params]
-        self.v_buffers = [None for _ in self.params]
+    def __init__(self, params, lr=DEFAULT_LEARNING_RATE_ADAM, betas=(DEFAULT_BETA1, DEFAULT_BETA2), eps=DEFAULT_EPS, weight_decay=DEFAULT_WEIGHT_DECAY_ADAMW):
+        defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
+        super().__init__(params, defaults)
 
     def step(self):
-        """
-        Perform AdamW update step with decouled weight decay
-        """
-        ##increment step counter first 
         self.step_count += 1
+        for group in self.param_groups:
+            beta1, beta2 = group['betas']
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                
+                # Perform step weight decay
+                if group['weight_decay'] != 0:
+                    p.data -= group['lr'] * group['weight_decay'] * p.data
 
-        for i,param in enumerate(self.params):
-            if param.grad is None:
-                continue 
+                grad = p.grad.data if isinstance(p.grad, Tensor) else p.grad
 
-            # get gradient data i.e grad can be Tensor or Numpy array
-            grad = param.grad
-            #handles both Tensor (with .data) and numpy array from autograd cases
-            if isinstance(grad,Tensor):
-                grad_data = grad.data
-            else:
-                #grad is already a numpy array from autograd
-                grad_data = grad
+                state = self.state.get(id(p), {})
+                if len(state) == 0:
+                    state['step'] = 0
+                    state['exp_avg'] = np.zeros_like(p.data)
+                    state['exp_avg_sq'] = np.zeros_like(p.data)
 
-            # intialize buffers if needed
-            if self.m_buffers[i] is None:
-                self.m_buffers[i] = np.zeros_like(param.data)
-                self.v_buffers[i] = np.zeros_like(param.data)
+                exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
+                state['step'] += 1
 
-            #update moments using pure gradients
-            self.m_buffers[i] = self.beta1 * self.m_buffers[i] + (1-self.beta1)* grad_data
-            self.v_buffers[i] = self.beta2 * self.v_buffers[i] + (1-self.beta2) * (grad_data ** 2)
+                exp_avg[:] = beta1 * exp_avg + (1 - beta1) * grad
+                exp_avg_sq[:] = beta2 * exp_avg_sq + (1 - beta2) * (grad * grad)
 
-            #compute bias correction
-            bias_correction1 = 1 -self.beta1 **self.step_count
-            bias_correction2 = 1 - self.beta2 ** self.step_count 
-
-            #compute bias-corrected moments
-            m_hat = self.m_buffers[i] / bias_correction1
-            v_hat = self.v_buffers[i] /bias_correction2
-
-            #apply gradient-based update
-            param.data = param.data - self.lr* m_hat / (np.sqrt(v_hat) + self.eps)
-
-            #apply decoupled weight decay
-            if self.weight_decay !=0:
-                param.data = param.data * (1 - self.lr * self.weight_decay)
+                bias_correction1 = 1 - beta1 ** state['step']
+                bias_correction2 = 1 - beta2 ** state['step']
+                
+                step_size = group['lr'] / bias_correction1
+                p.data -= step_size * exp_avg / (np.sqrt(exp_avg_sq / bias_correction2) + group['eps'])
+                self.state[id(p)] = state
                 
