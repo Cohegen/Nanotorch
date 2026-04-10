@@ -11,13 +11,13 @@ from .common import flatten_spatial, mark_parameters_trainable
 class VGGNetTinyDigits:
     """Compact VGG-style CNN for 8x8 grayscale digit images."""
 
-    def __init__(self, num_classes=10):
-        self.conv1 = Conv2d(in_channels=1, out_channels=8, kernel_size=3, padding=1)
-        self.conv2 = Conv2d(in_channels=8, out_channels=8, kernel_size=3, padding=1)
+    def __init__(self, num_classes=10, method='im2col'):
+        self.conv1 = Conv2d(in_channels=1, out_channels=8, kernel_size=3, padding=1, method=method)
+        self.conv2 = Conv2d(in_channels=8, out_channels=8, kernel_size=3, padding=1, method=method)
         self.pool1 = MaxPool2d(kernel_size=2, stride=2)
 
-        self.conv3 = Conv2d(in_channels=8, out_channels=16, kernel_size=3, padding=1)
-        self.conv4 = Conv2d(in_channels=16, out_channels=16, kernel_size=3, padding=1)
+        self.conv3 = Conv2d(in_channels=8, out_channels=16, kernel_size=3, padding=1, method=method)
+        self.conv4 = Conv2d(in_channels=16, out_channels=16, kernel_size=3, padding=1, method=method)
         self.pool2 = MaxPool2d(kernel_size=2, stride=2)
 
         self.relu = ReLU()

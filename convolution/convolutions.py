@@ -23,6 +23,67 @@ KB_TO_BYTES =1024 #kilobytes to bytes conversion
 MB_TO_BYTES = 1024 * 1024 #megabytes to bytes conversion
 
 
+def im2col(input_data, kernel_h, kernel_w, stride, padding):
+    """
+    Rearranges image blocks into columns for fast matrix multiplication.
+    
+    Args:
+        input_data: 4D input array (batch, channels, height, width)
+        kernel_h, kernel_w: size of the convolution kernel
+        stride: stride of the convolution
+        padding: zero-padding applied to the spatial dimensions
+        
+    Returns:
+        Matrix of shape (channels * kernel_h * kernel_w, batch * out_h * out_w)
+    """
+    batch_size, channels, in_h, in_w = input_data.shape
+    out_h = (in_h + 2 * padding - kernel_h) // stride + 1
+    out_w = (in_w + 2 * padding - kernel_w) // stride + 1
+
+    if padding > 0:
+        img = np.pad(input_data, ((0, 0), (0, 0), (padding, padding), (padding, padding)), mode='constant')
+    else:
+        img = input_data
+
+    # Use strides to create overlapping patches without explicit copying
+    # Resulting shape: (batch, channels, kernel_h, kernel_w, out_h, out_w)
+    # This is an advanced NumPy trick for memory efficiency
+    shape = (batch_size, channels, kernel_h, kernel_w, out_h, out_w)
+    strides = (img.strides[0], img.strides[1], img.strides[2], img.strides[3], img.strides[2] * stride, img.strides[3] * stride)
+    
+    patches = np.lib.stride_tricks.as_strided(img, shape=shape, strides=strides)
+    
+    # Transpose and reshape into columns: (C * Kh * Kw, B * Oh * Ow)
+    return patches.transpose(1, 2, 3, 0, 4, 5).reshape(channels * kernel_h * kernel_w, -1)
+
+
+def col2im(cols, input_shape, kernel_h, kernel_w, stride, padding):
+    """
+    Reconstructs image from columns (inverse of im2col).
+    Used for the backward pass to accumulate gradients.
+    """
+    batch_size, channels, in_h, in_w = input_shape
+    out_h = (in_h + 2 * padding - kernel_h) // stride + 1
+    out_w = (in_w + 2 * padding - kernel_w) // stride + 1
+
+    # Reshape back to (channels, kernel_h, kernel_w, batch, out_h, out_w)
+    cols_reshaped = cols.reshape(channels, kernel_h, kernel_w, batch_size, out_h, out_w)
+    
+    img_padded = np.zeros((batch_size, channels, in_h + 2 * padding, in_w + 2 * padding), dtype=cols.dtype)
+    
+    # Accumulate patches back into the image
+    for kh in range(kernel_h):
+        h_end = kh + stride * out_h
+        for kw in range(kernel_w):
+            w_end = kw + stride * out_w
+            # Transpose batch and channel to match img_padded: (batch, channels, out_h, out_w)
+            img_padded[:, :, kh:h_end:stride, kw:w_end:stride] += cols_reshaped[:, kh, kw, :, :, :].transpose(1, 0, 2, 3)
+
+    if padding > 0:
+        return img_padded[:, :, padding:-padding, padding:-padding]
+    return img_padded
+
+
 def validate_4d_input(x,layer_name):
     """"
     validates that the input tensor is 4D (batch,channels,height,width)
@@ -73,21 +134,21 @@ class Conv2dBackward(Function):
     grad_bias is gradient wrt bias (for bias updates)
     """
 
-    def __init__(self,x,weight,bias,stride,padding,kernel_size,padded_shape):
-        #Registering all tensors that neeed gradients with autograd
+    def __init__(self, x, weight, bias, stride, padding, kernel_size, method='im2col'):
+        # Registering all tensors that neeed gradients with autograd
         if bias is not None:
-            super().__init__(x,weight,bias)
+            super().__init__(x, weight, bias)
         else:
-            super().__init__(x,weight)
+            super().__init__(x, weight)
         self.x = x
         self.weight = weight
-        self.bias = bias 
-        self.stride = stride 
+        self.bias = bias
+        self.stride = stride
         self.padding = padding
         self.kernel_size = kernel_size
-        self.padded_shape = padded_shape
+        self.method = method
 
-    def apply(self,grad_output):
+    def apply(self, grad_output):
         """
         Compute gradients for convolution input and parameters
 
@@ -99,78 +160,96 @@ class Conv2dBackward(Function):
         Tuple of (grad_input,grad_weight,grad_bias)
 
         """
-        batch_size,out_channels, out_height,out_width = grad_output.shape
-        _,in_channels,in_height,in_width = self.x.shape 
-        kernel_h,kernel_w = self.kernel_size
+        batch_size, out_channels, out_height, out_width = grad_output.shape
+        _, in_channels, in_height, in_width = self.x.shape
+        kernel_h, kernel_w = self.kernel_size
 
-        #Applying  padding to input if need (for gradient computation)
-        if self.padding > 0:
-            padded_input = np.pad(
-                self.x.data,
-                ((0,0),(0,0),(self.padding,self.padding),(self.padding,self.padding)),
-                mode='constant',
-                constant_values=0
-            )
+        if self.method == 'naive':
+            # Applying padding to input if need (for gradient computation)
+            if self.padding > 0:
+                padded_input = np.pad(
+                    self.x.data,
+                    ((0, 0), (0, 0), (self.padding, self.padding), (self.padding, self.padding)),
+                    mode='constant',
+                    constant_values=0
+                )
+            else:
+                padded_input = self.x.data
 
-        else:
-            padded_input = self.x.data 
+            # initialize gradients
+            grad_input_padded = np.zeros_like(padded_input)
+            grad_weight = np.zeros_like(self.weight.data)
+            grad_bias = None if self.bias is None else np.zeros_like(self.bias.data)
 
-        #intialize gradients
-        grad_input_padded = np.zeros_like(padded_input)
-        grad_weight = np.zeros_like(self.weight.data)
-        grad_bias = None if self.bias is None else np.zeros_like(self.bias.data)
+            # computing gradients explicit loops
+            for b in range(batch_size):
+                for out_ch in range(out_channels):
+                    for out_h in range(out_height):
+                        for out_w in range(out_width):
+                            # Position in input
+                            in_h_start = out_h * self.stride
+                            in_w_start = out_w * self.stride
 
-        #computing gradients explicit loops 
-        for b in range(batch_size):
-            for out_ch in range(out_channels):
-                for out_h in range(out_height):
-                    for out_w in range(out_width):
-                        #Position in input
-                        in_h_start = out_h * self.stride
-                        in_w_start = out_w * self.stride 
+                            # gradient values flowing back to this position
+                            grad_val = grad_output[b, out_ch, out_h, out_w]
 
-                        #gradient values flowing back to this position
-                        grad_val = grad_output[b,out_ch,out_h,out_w]
+                            # distribute gradient to weight and input
+                            for k_h in range(kernel_h):
+                                for k_w in range(kernel_w):
+                                    for in_ch in range(in_channels):
+                                        # input position
+                                        in_h = in_h_start + k_h
+                                        in_w = in_w_start + k_w
 
-                        #distribute gradient to weight and input
-                        for k_h in range(kernel_h):
-                            for k_w in range(kernel_w):
-                                for in_ch in range(in_channels):
-                                    #input position
-                                    in_h = in_h_start + k_h
-                                    in_w = in_w_start + k_w 
+                                        # gradient wrt weight
+                                        grad_weight[out_ch, in_ch, k_h, k_w] += (
+                                            padded_input[b, in_ch, in_h, in_w] * grad_val
+                                        )
 
-                                    #gradient wrt weight
-                                    grad_weight[out_ch,in_ch,k_h,k_w] += (
-                                        padded_input[b,in_ch,in_h,in_w] * grad_val
-                                    )
+                                        # gradient wrt input
+                                        grad_input_padded[b, in_ch, in_h, in_w] += (
+                                            self.weight.data[out_ch, in_ch, k_h, k_w] * grad_val
+                                        )
 
-                                    #gradient wrt input
-                                    grad_input_padded[b,in_ch,in_h,in_w] += (
-                                        self.weight.data[out_ch,in_ch,k_h,k_w] * grad_val
-                                    )
+            # compute gradient wrt bias
+            if grad_bias is not None:
+                for out_ch in range(out_channels):
+                    grad_bias[out_ch] = grad_output[:, out_ch, :, :].sum()
 
+            # remove padding from input gradient
+            if self.padding > 0:
+                grad_input = grad_input_padded[:, :, self.padding:-self.padding, self.padding:-self.padding]
+            else:
+                grad_input = grad_input_padded
 
-        #compute gradient wrt bias (sum over batch and spatial dimensions)
-        if grad_bias is not None:
-            for out_ch in range(out_channels):
-                grad_bias[out_ch] = grad_output[:,out_ch,:,:].sum()
+        else:  # im2col method
+            # 1. Gradient wrt bias
+            grad_bias = None
+            if self.bias is not None:
+                grad_bias = np.sum(grad_output, axis=(0, 2, 3))
 
-        #remove padding from input gradient
-        if self.padding > 0:
-            grad_input = grad_input_padded[
-                :,:,
-                self.padding:-self.padding,
-                self.padding:-self.padding
-            ]
+            # 2. Reshape grad_output for matrix multiplication
+            # (Out_C, B * Oh * Ow)
+            grad_output_reshaped = grad_output.transpose(1, 0, 2, 3).reshape(out_channels, -1)
 
-        else:
-            grad_input = grad_input_padded
+            # 3. Gradient wrt weight
+            # grad_weight = grad_output_reshaped @ x_cols.T
+            # Need x_cols from forward pass. Since we don't store it in backward object for memory, 
+            # we recompute it or rely on a stored version if we decide to cache it.
+            # Recomputing for simplicity (matches standard autograd patterns)
+            x_cols = im2col(self.x.data, kernel_h, kernel_w, self.stride, self.padding)
+            grad_weight = np.matmul(grad_output_reshaped, x_cols.T)
+            grad_weight = grad_weight.reshape(self.weight.shape)
 
-        ##Returning gradients as numpy arrays (the autograd system handles storage)
-        ##we are doing this following the NanoTorch protocol
-        ## return(grad_input,grad_weight,grad_bias)
-        return grad_input,grad_weight,grad_bias 
+            # 4. Gradient wrt input (grad_input)
+            # grad_cols = w_matrix.T @ grad_output_reshaped
+            w_matrix = self.weight.data.reshape(out_channels, -1)
+            grad_cols = np.matmul(w_matrix.T, grad_output_reshaped)
+            
+            # 5. Transform columns back to image
+            grad_input = col2im(grad_cols, self.x.shape, kernel_h, kernel_w, self.stride, self.padding)
+
+        return grad_input, grad_weight, grad_bias
 
 class Conv2d:
     """
@@ -188,15 +267,24 @@ class Conv2d:
        bias: Whether to add learnable bias (default:True)
     """
 
-    def __init__(self,in_channels,out_channels,kernel_size,stride=1,padding=0,bias=True):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, bias=True, method='im2col'):
         """
-        Intialize Conv2d layer with proper weight intialization.
+        Initialize Conv2d layer with proper weight initialization.
 
+        Args:
+           in_channels: Number of input channels
+           out_channels: Number of output feature maps
+           kernel_size: Size of convolution kernel (int or tuple)
+           stride: Stride of convolution (default: 1)
+           padding: Zero-padding added to input (default: 0)
+           bias: Whether to add learnable bias (default: True)
+           method: Convolution implementation method ('naive' or 'im2col')
         """
         super().__init__()
 
         self.in_channels = in_channels
         self.out_channels = out_channels
+        self.method = method
 
         #handling kernel_size as int or tuple
         if isinstance(kernel_size,int):
@@ -288,40 +376,63 @@ class Conv2d:
 
 
         
-    def forward(self,x):
+    def forward(self, x):
         """
         Forward pass through Conv2d layer
         """
-        #input validation and shape extraction
-        validate_4d_input(x,"Conv2D")
+        # input validation and shape extraction
+        validate_4d_input(x, "Conv2D")
 
-        batch_size,in_channels,in_height,in_width = x.shape
+        batch_size, in_channels, in_height, in_width = x.shape
 
-        #computing output dimensions
-        out_height,out_width = self._compute_output_shape(in_height,in_width)
+        # computing output dimensions
+        out_height, out_width = self._compute_output_shape(in_height, in_width)
 
-        #applying padding
-        padded_input = self._apply_padding(x.data)
+        if self.method == 'naive':
+            # applying padding
+            padded_input = self._apply_padding(x.data)
 
-        #run convolution loops
-        output = self._convolve_loops(padded_input,batch_size,out_height,out_width)
+            # run convolution loops
+            output = self._convolve_loops(padded_input, batch_size, out_height, out_width)
 
-        #Adding bias if present
-        if self.bias is not None:
-            for out_ch in range(self.out_channels):
-                output[:,out_ch,:,:] += self.bias.data[out_ch]
+            # Adding bias if present
+            if self.bias is not None:
+                for out_ch in range(self.out_channels):
+                    output[:, out_ch, :, :] += self.bias.data[out_ch]
 
-        #Returning Tensor with graident tracking enabled
-        result = Tensor(output,requires_grad=(x.requires_grad or self.weight.requires_grad))
+        else:  # im2col method
+            kernel_h, kernel_w = self.kernel_size
+            
+            # 1. Transform input into columns
+            # Shape: (C * Kh * Kw, B * Oh * Ow)
+            x_cols = im2col(x.data, kernel_h, kernel_w, self.stride, self.padding)
+            
+            # 2. Reshape weights into a matrix for matmul
+            # Shape: (Out_C, C * Kh * Kw)
+            w_matrix = self.weight.data.reshape(self.out_channels, -1)
+            
+            # 3. Compute output using matrix multiplication
+            # Shape: (Out_C, B * Oh * Ow)
+            output_cols = np.matmul(w_matrix, x_cols)
+            
+            # 4. Reshape back to image format (B, Out_C, Oh, Ow)
+            output = output_cols.reshape(self.out_channels, batch_size, out_height, out_width).transpose(1, 0, 2, 3)
 
-        #Attaching backward function for gradient computation
+            # 5. Add bias
+            if self.bias is not None:
+                output += self.bias.data.reshape(1, -1, 1, 1)
+
+        # Returning Tensor with gradient tracking enabled
+        result = Tensor(output, requires_grad=(x.requires_grad or self.weight.requires_grad))
+
+        # Attaching backward function for gradient computation
         if result.requires_grad:
             result._grad_fn = Conv2dBackward(
-                x,self.weight,self.bias,
-                self.stride,self.padding,self.kernel_size,
-                padded_input.shape
+                x, self.weight, self.bias,
+                self.stride, self.padding, self.kernel_size,
+                self.method
             )
-        return result 
+        return result
 
 
 

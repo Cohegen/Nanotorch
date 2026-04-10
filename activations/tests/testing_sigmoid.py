@@ -3,7 +3,7 @@ from activations import TOLERANCE
 import sys 
 import os
 ## adding parent directory to path to allow importing Tensor module
-sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from  Tensor import Tensor
 import numpy as np
 

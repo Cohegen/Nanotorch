@@ -11,10 +11,10 @@ from .common import flatten_spatial, mark_parameters_trainable
 class AlexNetTinyDigits:
     """Tiny AlexNet-style CNN sized for 8x8 grayscale digits."""
 
-    def __init__(self, num_classes=10):
-        self.conv1 = Conv2d(in_channels=1, out_channels=8, kernel_size=3, padding=1)
+    def __init__(self, num_classes=10, method='im2col'):
+        self.conv1 = Conv2d(in_channels=1, out_channels=8, kernel_size=3, padding=1, method=method)
         self.pool1 = MaxPool2d(kernel_size=2, stride=2)
-        self.conv2 = Conv2d(in_channels=8, out_channels=16, kernel_size=3, padding=1)
+        self.conv2 = Conv2d(in_channels=8, out_channels=16, kernel_size=3, padding=1, method=method)
         self.pool2 = MaxPool2d(kernel_size=2, stride=2)
 
         self.relu = ReLU()

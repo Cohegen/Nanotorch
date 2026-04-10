@@ -457,75 +457,7 @@ Training Mode:                      Eval Mode:
 Computes μ, σ² from                Uses frozen μ, σ² for
 current batch                      consistent inference
 ```
-
-## Building a Complete CNN
-
-### CNN Architecture: From Pixels to Predictions
-
-A CNN processes images through alternating convolution and pooling layers, gradually extracting higher-level features:
-
-
-![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/hierarchy.png)
-
-```
-Complete CNN Pipeline:
-
-Input Image (32×32×3)     Raw RGB pixels
-       ↓
-Conv2d(3→16, 3×3)        Detect edges, textures
-       ↓
-ReLU Activation          Remove negative values
-       ↓
-MaxPool(2×2)             Reduce to (16×16×16)
-       ↓
-Conv2d(16→32, 3×3)       Detect shapes, patterns
-       ↓
-ReLU Activation          Remove negative values
-       ↓
-MaxPool(2×2)             Reduce to (8×8×32)
-       ↓
-Flatten                  Reshape to vector (2048,)
-       ↓
-Linear(2048→10)          Final classification
-       ↓
-Softmax                  Probability distribution
-```
-### Parameter Efficiency: CNN vs. Dense
-```
-CNN vs Dense Network Comparison:
-
-CNN Approach:                     Dense Approach:
-┌─────────────────┐               ┌─────────────────┐
-│ Conv1: 3→16     │               │ Input: 32×32×3  │
-│ Params: 448     │               │ = 3,072 values  │
-├─────────────────┤               ├─────────────────┤
-│ Conv2: 16→32    │               │ Hidden: 1,000   │
-│ Params: 4,640   │               │ Params: 3M+     │
-├─────────────────┤               ├─────────────────┤
-│ Linear: 2048→10 │               │ Output: 10      │
-│ Params: 20,490  │               │ Params: 10K     │
-└─────────────────┘               └─────────────────┘
-Total: ~25K params                Total: ~3M params
-
-```
-### Spatial Hierarchy: Why This Architecture Works
-```
-Layer-by-Layer Feature Evolution:
-
-Layer 1 (Conv 3→16):              Layer 2 (Conv 16→32):
-┌─────┐ ┌─────┐ ┌─────┐           ┌─────┐ ┌──────┐ ┌───────┐
-│Edge │ │Edge │ │Edge │           │Shape│ │Corner│ │Texture│
-│ \\ /│ │  |  │ │ / \\│           │ ◇   │ │  L   │ │ ≈≈≈≈≈ │
-└─────┘ └─────┘ └─────┘           └─────┘ └──────┘ └───────┘
-Simple features                   Complex combinations
-
-Why pooling between layers:
-
-- Reduces computation for the next layer.
-- Increases receptive field (each conv sees a larger input area).
-- Provides translation invariance (e.g. cat moved by 1 pixel is still detected).
 <<<<<<< Updated upstream
 ```
 =======
 ```
-

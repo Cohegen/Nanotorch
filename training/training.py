@@ -119,76 +119,88 @@ class Trainer:
             'learning_rates':[]
         }
 
-    def train_epoch(self,dataloader,accumulation_steps=1):
+    def train_epoch(self, dataloader, accumulation_steps=1):
         """
         Train for one epoch through the dataset.
 
         Args:
-            dataloader:iterable yielding (inputs,target) batches
+            dataloader: iterable yielding (inputs, target) batches
             accumulation_steps: number of batches to accumulate before update
 
         Returns:
             Average loss for the epoch
         """
-        self.model.training =True 
-        self.training_mode = True 
+        self.model.training = True
+        self.training_mode = True
 
         total_loss = 0.0
         num_batches = 0
-        accumulated_loss =0.0
+        num_updates = 0
+        accumulated_loss = 0.0
 
-        for batch_idx,(inputs,targets) in enumerate(dataloader):
-            #forward pass
+        self.optimizer.zero_grad()
+
+        for batch_idx, (inputs, targets) in enumerate(dataloader):
+            # forward pass
             outputs = self.model.forward(inputs)
-            loss = self.loss_fn.forward(outputs,targets)
+            loss = self.loss_fn.forward(outputs, targets)
 
-            #scale loss for accumulation
-            scaled_loss = loss.data / accumulation_steps
-            accumulation_steps += scaled_loss
-
-            #backward pass with scaled gradient
+            # scale loss for accumulation
+            batch_loss = loss.data if isinstance(loss.data, (float, np.float32, np.float64)) else loss.data.item()
+            accumulated_loss += batch_loss
+            
+            # backward pass with scaled gradient
+            # We scale the gradient by 1/accumulation_steps so that after summing 
+            # accumulation_steps gradients, we have the average gradient.
             scaled_gradient = np.ones_like(loss.data) / accumulation_steps
             loss.backward(scaled_gradient)
 
-            #updating parameters every accumulation steps
+            # updating parameters every accumulation steps
             if (batch_idx + 1) % accumulation_steps == 0:
-                #gradient clipping
+                # gradient clipping
                 if self.grad_clip_norm is not None:
                     params = self.model.parameters()
-                    clip_grad_norm(params,self.grad_clip_norm)
+                    clip_grad_norm(params, self.grad_clip_norm)
 
-                #optimizer step
+                # optimizer step
                 self.optimizer.step()
                 self.optimizer.zero_grad()
 
-                total_los += accumulated_loss
+                total_loss += accumulated_loss / accumulation_steps
                 accumulated_loss = 0.0
-                num_batches += 1
-                self.step +=1 
+                num_updates += 1
+                self.step += 1
 
-            #handling remaining accumulated gradients
-            if accumulated_loss > 0:
-                if self.grad_clip_norm is not None:
-                    params = self.model.parameters()
-                    clip_grad_norm(params,self.grad_clip_norm)
+            num_batches += 1
 
-                self.optimizer.step()
-                self.optimizer.zero_grad()
-                total_loss += accumulated_loss
-                num_batches += 1
+        # handling remaining accumulated gradients
+        if (num_batches % accumulation_steps) != 0:
+            remaining_steps = num_batches % accumulation_steps
+            # Optional: Rescale gradients if we want the exact average over the smaller batch
+            # But usually we just step with what we have.
+            
+            if self.grad_clip_norm is not None:
+                params = self.model.parameters()
+                clip_grad_norm(params, self.grad_clip_norm)
 
-            avg_loss=total_loss / max(num_batches,1)
-            self.history['train_loss'].append(avg_loss)
+            self.optimizer.step()
+            self.optimizer.zero_grad()
+            total_loss += accumulated_loss / remaining_steps
+            num_updates += 1
+            self.step += 1
 
-            #update scheduler
-            if self.scheduler is not None:
-                current_lr = self.scheduler.get_lr(self.epoch)
-                #update optimizer learning rate\
-                self.optimizer.lr = current_lr 
-                self.history['learning_rates'].append(current_lr)
+        avg_loss = total_loss / max(num_updates, 1)
+        self.history['train_loss'].append(avg_loss)
 
-            self.epoch += 1
-            return avg_loss
+        # update scheduler
+        if self.scheduler is not None:
+            current_lr = self.scheduler.get_lr(self.epoch)
+            # update optimizer learning rate
+            self.optimizer.lr = current_lr
+            self.history['learning_rates'].append(current_lr)
+
+        self.epoch += 1
+        return avg_loss
 
     def evaluate(self,dataloader):
         """

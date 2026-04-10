@@ -3,7 +3,7 @@ import os
 import sys
 
 
-sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from Tensor import Tensor
 from activations.activations import Tanh, TOLERANCE, Sigmoid,ReLU, GELU,Softmax
 from activations.testing_gelu import testing_gelu

@@ -11,9 +11,9 @@ from .common import flatten_spatial, mark_parameters_trainable
 class ResidualBlock:
     """A small basic residual block without batch normalization."""
 
-    def __init__(self, channels):
-        self.conv1 = Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
-        self.conv2 = Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
+    def __init__(self, channels, method='im2col'):
+        self.conv1 = Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1, method=method)
+        self.conv2 = Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1, method=method)
         self.relu = ReLU()
 
     def forward(self, x):
@@ -38,12 +38,12 @@ class ResidualBlock:
 class MiniResNetDigits:
     """CPU-friendly mini ResNet for 8x8 grayscale digit images."""
 
-    def __init__(self, num_classes=10):
-        self.stem = Conv2d(in_channels=1, out_channels=8, kernel_size=3, padding=1)
-        self.block1 = ResidualBlock(channels=8)
+    def __init__(self, num_classes=10, method='im2col'):
+        self.stem = Conv2d(in_channels=1, out_channels=8, kernel_size=3, padding=1, method=method)
+        self.block1 = ResidualBlock(channels=8, method=method)
         self.pool = MaxPool2d(kernel_size=2, stride=2)
-        self.transition = Conv2d(in_channels=8, out_channels=16, kernel_size=3, padding=1)
-        self.block2 = ResidualBlock(channels=16)
+        self.transition = Conv2d(in_channels=8, out_channels=16, kernel_size=3, padding=1, method=method)
+        self.block2 = ResidualBlock(channels=16, method=method)
 
         self.relu = ReLU()
         self.fc1 = Linear(16 * 4 * 4, 32)
