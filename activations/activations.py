@@ -1,6 +1,5 @@
 import sys
 import os
-from turtle import forward
 # Add parent directory to path to allow importing Tensor module
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

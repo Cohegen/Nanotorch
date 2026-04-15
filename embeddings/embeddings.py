@@ -1,4 +1,3 @@
-from tkinter import NO
 import numpy as np
 import math 
 from typing import List,Optional,Tuple
@@ -412,4 +411,4 @@ def emblayer_forward(self,tokens:Tensor)-> Tensor:
     return output 
 
 #Attaching forward to EmbeddingLayer class
-EmbeddingLayer.forward = emblayer_forward 
+EmbeddingLayer.forward = emblayer_forward  
