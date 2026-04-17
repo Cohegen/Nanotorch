@@ -1,3 +1,4 @@
+# NanoTorch 1.2
 ![Output examples](azula.gif)
 
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/logo1.png)
