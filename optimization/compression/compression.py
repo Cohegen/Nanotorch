@@ -43,13 +43,13 @@ def measure_sparsity(model) ->float:
         #only counting weight matrices (2D), not biases (1D)
         #biases are often intialized to zero, which would skew sparsity
         if len(param.shape) > 1:
-            total_params += param.size 
+            total_params += param.data.size
             zero_params += np.sum(param.data == 0)
 
-        if total_params == 0:
-            return 0.0
+    if total_params == 0:
+        return 0.0
 
-        return (zero_params /total_params) * 100.0
+    return (zero_params / total_params) * 100.0
 
     
 def magnitude_prune(model,sparsity=0.9):
@@ -78,19 +78,19 @@ def magnitude_prune(model,sparsity=0.9):
             all_weights.extend(param.data.flatten())
             weights_params.append(param)
 
-        if not all_weights:
-            return model
-
-        #calculates magnitude threshold
-        magnitudes = np.abs(all_weights)
-        threshold = np.percentile(magnitudes,sparsity*100)
-
-        #apply pruning to each weight parameter
-        for param in weights_params:
-            mask = np.abs(param.data) >= threshold
-            param.data= param.data * mask
-
+    if not all_weights:
         return model
+
+    #calculates magnitude threshold
+    magnitudes = np.abs(all_weights)
+    threshold = np.percentile(magnitudes,sparsity*100)
+
+    #apply pruning to each weight parameter
+    for param in weights_params:
+        mask = np.abs(param.data) >= threshold
+        param.data = param.data * mask
+
+    return model
 
 def structured_prune(model,prune_ratio=0.5):
     """
@@ -113,19 +113,20 @@ def structured_prune(model,prune_ratio=0.5):
         if isinstance(layer,Linear):
             weight = layer.weight.data 
 
-            #calculating L2 norm for each output channel (column)
-            channel_norms = np.linalg.norm(weight,axis=0)
+            # Linear.weight is shaped (out_features, in_features), so each
+            # output neuron/channel is a row, not a column.
+            channel_norms = np.linalg.norm(weight,axis=1)
 
             #finding channels to prune (lowest importance)
-            num_channels = weight.shape[1]
+            num_channels = weight.shape[0]
             num_to_prune = int(num_channels * prune_ratio)
 
             if num_to_prune > 0:
                 #getting indices of channels to prune (smalles norm)
                 prune_indices = np.argpartition(channel_norms,num_to_prune)[:num_to_prune]
 
-                #zeros out entire channels
-                weight[:,prune_indices] =0
+                #zeros out entire output channels / neurons
+                weight[prune_indices,:] =0
 
                 #also zeroing corresponding bias element if bias exists
                 if layer.bias is not None:
@@ -274,7 +275,7 @@ def compress_model(model,compression_config):
     Final sparsity: 85.0%
     """
 
-    original_params = sum(p.size for p in model.parameters())
+    original_params = sum(p.data.size for p in model.parameters())
     original_sparsity = measure_sparsity(model)
 
     stats = {

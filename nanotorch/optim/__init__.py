@@ -1,5 +1,5 @@
 """Optimizer compatibility exports."""
 
-from optimizers.optimizers import Adam, AdamW, Optimizer, SGD
+from optimizers.optimizers import Adam, AdamW, Muon, Optimizer, SGD
 
-__all__ = ["Adam", "AdamW", "Optimizer", "SGD"]
+__all__ = ["Adam", "AdamW", "Muon", "Optimizer", "SGD"]

@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 
 from numpy.polynomial import test
 
@@ -57,23 +58,19 @@ def test_trainer():
 
     #test checkpointing
     print("Testing checkpointing...")
-    checkpoint_path = "/tmp/test_checkpoint.pkl"
-    trainer.save_checkpoint(checkpoint_path)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        checkpoint_path = os.path.join(tmpdir, "test_checkpoint.pkl")
+        trainer.save_checkpoint(checkpoint_path)
 
-    #modify trainer state 
-    original_epoch = trainer.epoch
-    trainer.epoch = 999
+        #modify trainer state 
+        original_epoch = trainer.epoch
+        trainer.epoch = 999
 
-    #loading checkpoint
-    trainer.load_checkpoint(checkpoint_path)
-    assert trainer.epoch == original_epoch, f"Checkpoint didn't restore epoch correctly"
-
-    #clean up
-    import os
-    if os.path.exists(checkpoint_path):
-        os.remove(checkpoint_path)
+        #loading checkpoint
+        trainer.load_checkpoint(checkpoint_path)
+        assert trainer.epoch == original_epoch, f"Checkpoint didn't restore epoch correctly"
     
     print(f"Trainer works correctly, Final loss: {loss:.4f}")
 
-if __name__ == "__main___":
+if __name__ == "__main__":
     test_trainer()

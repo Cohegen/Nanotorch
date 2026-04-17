@@ -16,6 +16,7 @@ from tokenization.tokenization import CharTokenizer
 from dataloader.dataloader import TensorDataset, Dataloader
 from projects.Transformers.nanoGPT_model import GPT, GPTConfig
 from optimizers.optimizers import AdamW
+from nanotorch.utils.checkpointing import load_checkpoint, save_checkpoint
 
 # Enable autograd for training
 enable_autograd(quiet=True)
@@ -29,6 +30,8 @@ learning_rate = 1e-3
 device_type = 'cpu'
 eval_interval = 10
 eval_iters = 20
+checkpoint_path = ROOT / "projects" / "Transformers" / "checkpoints" / "nanogpt_names.pkl"
+resume_from_checkpoint = True
 
 # Model configuration
 config = GPTConfig(
@@ -74,6 +77,13 @@ model = GPT(config)
 
 # Optimizer initialization
 optimizer = model.configure_optimizers(weight_decay=0.1, learning_rate=learning_rate, betas=(0.9, 0.95), device_type=device_type)
+start_iter = 0
+
+if resume_from_checkpoint and checkpoint_path.exists():
+    checkpoint = load_checkpoint(checkpoint_path, model=model, optimizer=optimizer)
+    metadata = checkpoint.get("metadata", {})
+    start_iter = int(metadata.get("iter", 0))
+    print(f"Resumed checkpoint from iter {start_iter} at {checkpoint_path}")
 
 # -----------------------------------------------------------------------------
 # Training loop
@@ -93,12 +103,33 @@ def estimate_loss():
 
 print("Starting training...")
 t0 = time.time()
-for iter in range(max_iters):
+for iter in range(start_iter, max_iters):
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter % eval_interval == 0:
         losses = estimate_loss()
         print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        save_checkpoint(
+            checkpoint_path,
+            model,
+            optimizer=optimizer,
+            epoch=iter,
+            metadata={
+                "iter": iter,
+                "train_loss": float(losses["train"]),
+                "val_loss": float(losses["val"]),
+                "config": {
+                    "batch_size": batch_size,
+                    "block_size": block_size,
+                    "max_iters": max_iters,
+                    "learning_rate": learning_rate,
+                    "num_layers": config.num_layers,
+                    "num_heads": config.num_heads,
+                    "embed_dim": config.embed_dim,
+                    "vocab_size": config.vocab_size,
+                },
+            },
+        )
 
     # sample a batch of data
     xb, yb = get_batch('train')
@@ -117,6 +148,14 @@ for iter in range(max_iters):
         dt = time.time() - t0
         t0 = time.time()
         print(f"iter {iter}: loss {loss.data:.4f}, time {dt*1000:.2f}ms")
+
+save_checkpoint(
+    checkpoint_path,
+    model,
+    optimizer=optimizer,
+    epoch=max_iters,
+    metadata={"iter": max_iters},
+)
 
 # -----------------------------------------------------------------------------
 # Generation test

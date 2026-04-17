@@ -5,12 +5,13 @@ import sys
 
 sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from Tensor import Tensor
-from activations.activations import Tanh, TOLERANCE, Sigmoid,ReLU, GELU,Softmax
-from activations.testing_gelu import testing_gelu
-from activations.testing_relu import testing_relu
-from activations.testing_sigmoid import testing_sigmoid
-from activations.testing_softmax import testing_softmax
-from activations.testing_tanh import testing_tanh
+from activations.activations import ELU, GELU, LeakyReLU, Mish, PReLU, ReLU, SiLU, Sigmoid, Softmax, SwiGLU, Tanh, TOLERANCE
+from activations.tests.testing_extended_activations import testing_extended_activations
+from activations.tests.testing_gelu import testing_gelu
+from activations.tests.testing_relu import testing_relu
+from activations.tests.testing_sigmoid import testing_sigmoid
+from activations.tests.testing_softmax import testing_softmax
+from activations.tests.testing_tanh import testing_tanh
 ##complete module test
 def testing_module():
     print("Running module intergration test")
@@ -23,6 +24,7 @@ def testing_module():
     testing_tanh()
     testing_gelu()
     testing_softmax()
+    testing_extended_activations()
 
     print("\n Running intergration scenarios")
 
@@ -30,7 +32,7 @@ def testing_module():
     print("Intergration test: Tensor property preservation...")
     test_data = Tensor([[1,-1],[2,-2]])
 
-    activations = [Sigmoid(),ReLU(),Tanh(),GELU()]
+    activations = [Sigmoid(),ReLU(),LeakyReLU(),SiLU(),Mish(),PReLU(),ELU(),Tanh(),GELU()]
     for activation in activations:
         result = activation.forward(test_data)
         assert result.shape == test_data.shape, f"Shape not preserved by{activation.__class__.__name}"
@@ -53,6 +55,12 @@ def testing_module():
     assert np.allclose(last_dim_sums,1.0),"Last dimension should sum to 1"
 
     print("Softmax handles different dimensions correctly")
+
+    # SwiGLU reduces the split dimension by half
+    swiglu = SwiGLU()
+    swiglu_input = Tensor([[1, 2, 3, 4]])
+    swiglu_output = swiglu.forward(swiglu_input)
+    assert swiglu_output.shape == (1, 2), "SwiGLU should halve the split dimension"
 
     #3. Testing 3 Activation chaining (simulating neural network)
     print("Intergration Test: Activation chaining...")

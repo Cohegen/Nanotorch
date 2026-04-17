@@ -215,11 +215,13 @@ class QuantizedLinear:
         (1, 3)
         """
 
-        #dequantize weights 
+        #dequantize weights and restore the original Linear layout
+        # Linear.forward uses x @ weight.T because weights are stored as
+        # (out_features, in_features).
         weight_fp32 = dequantize_int8(self.q_weight,self.weight_scale,self.weight_zero_point)
 
         #perform computation 
-        result = x.matmul(weight_fp32)
+        result = x.matmul(weight_fp32.transpose(-2, -1))
 
         #add bias if it exists 
         if self.q_bias is not None:

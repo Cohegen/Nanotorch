@@ -1,6 +1,6 @@
 """Neural-network compatibility exports."""
 
-from activations.activations import GELU, ReLU, Sigmoid, Softmax, Tanh
+from activations.activations import ELU, GELU, LeakyReLU, Mish, PReLU, ReLU, SiLU, Sigmoid, Softmax, SwiGLU, Tanh
 from attention.attention import MultiHeadAttention, scaled_dot_product_attention
 from convolution.convolutions import AvgPool2d, BatchNorm2d, Conv2d, MaxPool2d
 from embeddings.embeddings import (
@@ -29,6 +29,7 @@ __all__ = [
     "Embedding",
     "EmbeddingLayer",
     "embeddings",
+    "ELU",
     "functional",
     "GELU",
     "GPT",
@@ -36,19 +37,24 @@ __all__ = [
     "LayerNorm",
     "Linear",
     "log_softmax",
+    "LeakyReLU",
     "losses",
     "MaxPool2d",
+    "Mish",
     "MLP",
     "modules",
     "Module",
     "MSELoss",
     "MultiHeadAttention",
+    "PReLU",
     "PositionalEncoding",
     "ReLU",
+    "SiLU",
     "scaled_dot_product_attention",
     "Sequential",
     "Sigmoid",
     "Softmax",
+    "SwiGLU",
     "Tanh",
     "transformer",
     "TransformerBlock",

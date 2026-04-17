@@ -3,6 +3,7 @@
 from Tensor.tensor import Tensor
 
 from . import autograd, nn, optim, optimization, tokenization, training, utils
+from .utils import load_checkpoint, load_state_dict, save_checkpoint, save_state_dict
 
 
 def tensor(data, requires_grad=False):
@@ -16,6 +17,10 @@ __all__ = [
     "nn",
     "optim",
     "optimization",
+    "load_checkpoint",
+    "load_state_dict",
+    "save_checkpoint",
+    "save_state_dict",
     "tensor",
     "tokenization",
     "training",

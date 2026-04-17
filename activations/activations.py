@@ -11,7 +11,7 @@ from typing import Optional
 TOLERANCE = 1e-10
 
 #export only activation classes
-__all__  = ['Sigmoid','ReLU','Tanh','GELU','Softmax']
+__all__  = ['Sigmoid','ReLU','LeakyReLU','SiLU','Mish','PReLU','SwiGLU','ELU','Tanh','GELU','Softmax']
 
 
 class Sigmoid:
@@ -75,6 +75,106 @@ class ReLU:
     def backward(self,grad: Tensor) -> Tensor:
         """Computes gradient """
         pass
+
+
+class LeakyReLU:
+    """Leaky ReLU activation: f(x) = x if x > 0 else negative_slope * x."""
+
+    def __init__(self, negative_slope: float = 0.01):
+        self.negative_slope = negative_slope
+
+    def parameters(self):
+        return []
+
+    def forward(self, x: Tensor) -> Tensor:
+        result = np.where(x.data > 0, x.data, self.negative_slope * x.data)
+        return Tensor(result)
+
+    def __call__(self, x: Tensor) -> Tensor:
+        return self.forward(x)
+
+
+class SiLU:
+    """SiLU / Swish activation: f(x) = x * sigmoid(x)."""
+
+    def parameters(self):
+        return []
+
+    def forward(self, x: Tensor) -> Tensor:
+        z = np.clip(x.data, -500, 500)
+        sigmoid = 1.0 / (1.0 + np.exp(-z))
+        return Tensor(x.data * sigmoid)
+
+    def __call__(self, x: Tensor) -> Tensor:
+        return self.forward(x)
+
+
+class Mish:
+    """Mish activation: f(x) = x * tanh(softplus(x))."""
+
+    def parameters(self):
+        return []
+
+    def forward(self, x: Tensor) -> Tensor:
+        softplus = np.log1p(np.exp(-np.abs(x.data))) + np.maximum(x.data, 0)
+        return Tensor(x.data * np.tanh(softplus))
+
+    def __call__(self, x: Tensor) -> Tensor:
+        return self.forward(x)
+
+
+class PReLU:
+    """Parametric ReLU with a learnable negative slope."""
+
+    def __init__(self, init: float = 0.25):
+        self.weight = Tensor([init], requires_grad=True)
+
+    def parameters(self):
+        return [self.weight]
+
+    def forward(self, x: Tensor) -> Tensor:
+        negative_slope = float(self.weight.data.reshape(-1)[0])
+        result = np.where(x.data > 0, x.data, negative_slope * x.data)
+        return Tensor(result)
+
+    def __call__(self, x: Tensor) -> Tensor:
+        return self.forward(x)
+
+
+class SwiGLU:
+    """SwiGLU activation: split in half and apply a * SiLU(gate)."""
+
+    def parameters(self):
+        return []
+
+    def forward(self, x: Tensor, dim: int = -1) -> Tensor:
+        size = x.data.shape[dim]
+        if size % 2 != 0:
+            raise ValueError("SwiGLU requires an even-sized dimension for splitting")
+
+        first_half, second_half = np.split(x.data, 2, axis=dim)
+        gate = second_half * (1.0 / (1.0 + np.exp(-np.clip(second_half, -500, 500))))
+        return Tensor(first_half * gate)
+
+    def __call__(self, x: Tensor, dim: int = -1) -> Tensor:
+        return self.forward(x, dim)
+
+
+class ELU:
+    """Exponential Linear Unit activation."""
+
+    def __init__(self, alpha: float = 1.0):
+        self.alpha = alpha
+
+    def parameters(self):
+        return []
+
+    def forward(self, x: Tensor) -> Tensor:
+        result = np.where(x.data > 0, x.data, self.alpha * (np.exp(x.data) - 1.0))
+        return Tensor(result)
+
+    def __call__(self, x: Tensor) -> Tensor:
+        return self.forward(x)
 
 class Tanh:
     """Coded implementation of Tanh activation function 

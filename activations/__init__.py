@@ -3,6 +3,32 @@ import os
 import sys
 sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from activations.activations import Sigmoid, ReLU, Tanh, TOLERANCE,GELU, Softmax
+from activations.activations import (
+    ELU,
+    GELU,
+    LeakyReLU,
+    Mish,
+    PReLU,
+    ReLU,
+    SiLU,
+    Sigmoid,
+    Softmax,
+    SwiGLU,
+    TOLERANCE,
+    Tanh,
+)
 
-__all__ = ['Sigmoid', 'ReLU', 'Tanh', 'TOLERANCE','GELU','Softmax']
+__all__ = [
+    'Sigmoid',
+    'ReLU',
+    'LeakyReLU',
+    'SiLU',
+    'Mish',
+    'PReLU',
+    'SwiGLU',
+    'ELU',
+    'Tanh',
+    'TOLERANCE',
+    'GELU',
+    'Softmax',
+]

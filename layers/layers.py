@@ -84,6 +84,56 @@ class Layer:
         for name, module in self._modules.items():
             yield from module.named_parameters(prefix + ('.' if prefix else '') + name)
 
+    def named_buffers(self, prefix=''):
+        """Returns an iterator over module buffers, yielding both the name and the buffer."""
+        for name, buf in self._buffers.items():
+            yield prefix + ('.' if prefix else '') + name, buf
+        for name, module in self._modules.items():
+            yield from module.named_buffers(prefix + ('.' if prefix else '') + name)
+
+    def state_dict(self, prefix='', destination=None):
+        """Returns a dictionary containing parameters and registered buffers."""
+        if destination is None:
+            destination = {}
+
+        for name, param in self._parameters.items():
+            key = prefix + ('.' if prefix else '') + name
+            destination[key] = np.array(param.data, copy=True)
+
+        for name, buf in self._buffers.items():
+            key = prefix + ('.' if prefix else '') + name
+            destination[key] = np.array(buf.data, copy=True)
+
+        for name, module in self._modules.items():
+            module_prefix = prefix + ('.' if prefix else '') + name
+            module.state_dict(prefix=module_prefix, destination=destination)
+
+        return destination
+
+    def load_state_dict(self, state_dict, strict=True):
+        """Loads parameters and buffers from a state dictionary."""
+        expected = self.state_dict()
+        expected_keys = set(expected.keys())
+        provided_keys = set(state_dict.keys())
+
+        missing_keys = sorted(expected_keys - provided_keys)
+        unexpected_keys = sorted(provided_keys - expected_keys)
+
+        if strict and missing_keys:
+            raise KeyError(f"Missing keys in state_dict: {missing_keys}")
+        if strict and unexpected_keys:
+            raise KeyError(f"Unexpected keys in state_dict: {unexpected_keys}")
+
+        for name, param in self.named_parameters():
+            if name in state_dict:
+                _load_tensor_value(param, state_dict[name], name)
+
+        for name, buf in self.named_buffers():
+            if name in state_dict:
+                _load_tensor_value(buf, state_dict[name], name)
+
+        return {"missing_keys": missing_keys, "unexpected_keys": unexpected_keys}
+
     def forward(self, x):
         raise NotImplementedError("Subclasses must implement forward()")
 
@@ -251,9 +301,71 @@ class Sequential:
             params.extend(layer.parameters())
         return params 
 
+    def named_parameters(self, prefix=''):
+        """Returns an iterator over parameters in child layers."""
+        for index, layer in enumerate(self.layers):
+            if hasattr(layer, 'named_parameters'):
+                layer_prefix = prefix + ('.' if prefix else '') + f"layers.{index}"
+                yield from layer.named_parameters(layer_prefix)
+
+    def named_buffers(self, prefix=''):
+        """Returns an iterator over registered buffers in child layers."""
+        for index, layer in enumerate(self.layers):
+            if hasattr(layer, 'named_buffers'):
+                layer_prefix = prefix + ('.' if prefix else '') + f"layers.{index}"
+                yield from layer.named_buffers(layer_prefix)
+
+    def state_dict(self, prefix='', destination=None):
+        """Returns a dictionary containing parameters and buffers for all child layers."""
+        if destination is None:
+            destination = {}
+        for index, layer in enumerate(self.layers):
+            if hasattr(layer, 'state_dict'):
+                layer_prefix = prefix + ('.' if prefix else '') + f"layers.{index}"
+                layer.state_dict(prefix=layer_prefix, destination=destination)
+        return destination
+
+    def load_state_dict(self, state_dict, strict=True):
+        """Loads a state dictionary into all child layers."""
+        expected = self.state_dict()
+        expected_keys = set(expected.keys())
+        provided_keys = set(state_dict.keys())
+
+        missing_keys = sorted(expected_keys - provided_keys)
+        unexpected_keys = sorted(provided_keys - expected_keys)
+
+        if strict and missing_keys:
+            raise KeyError(f"Missing keys in state_dict: {missing_keys}")
+        if strict and unexpected_keys:
+            raise KeyError(f"Unexpected keys in state_dict: {unexpected_keys}")
+
+        for name, param in self.named_parameters():
+            if name in state_dict:
+                _load_tensor_value(param, state_dict[name], name)
+
+        for name, buf in self.named_buffers():
+            if name in state_dict:
+                _load_tensor_value(buf, state_dict[name], name)
+
+        return {"missing_keys": missing_keys, "unexpected_keys": unexpected_keys}
+
     def __repr__(self):
         layer_reprs = ",".join(repr(layer) for layer in self.layers)
         return f"Sequential({layer_reprs})"
+
+
+def _load_tensor_value(tensor, value, key):
+    """Loads array-like data into an existing tensor after shape validation."""
+    source = value.data if isinstance(value, Tensor) else value
+    source = np.array(source, dtype=tensor.data.dtype, copy=True)
+    if source.shape != tensor.data.shape:
+        raise ValueError(
+            f"Shape mismatch for '{key}': expected {tensor.data.shape}, got {source.shape}"
+        )
+    tensor.data = source
+    tensor.shape = tensor.data.shape
+    tensor.size_val = tensor.data.size
+    tensor.dtype = tensor.data.dtype
 
 
         

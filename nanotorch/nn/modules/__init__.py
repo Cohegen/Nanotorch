@@ -1,6 +1,6 @@
 """PyTorch-style nn.modules namespace."""
 
-from activations.activations import GELU, ReLU, Sigmoid, Softmax, Tanh
+from activations.activations import ELU, GELU, LeakyReLU, Mish, PReLU, ReLU, SiLU, Sigmoid, Softmax, SwiGLU, Tanh
 from attention.attention import MultiHeadAttention, scaled_dot_product_attention
 from convolution.convolutions import AvgPool2d, BatchNorm2d, Conv2d, MaxPool2d
 from embeddings.embeddings import (
@@ -40,27 +40,33 @@ __all__ = [
     "Dropout",
     "Embedding",
     "EmbeddingLayer",
+    "ELU",
     "GELU",
     "GPT",
     "Layer",
     "LayerNorm",
+    "LeakyReLU",
     "Linear",
     "linear",
     "loss",
     "MaxPool2d",
+    "Mish",
     "MLP",
     "Module",
     "MSELoss",
     "MultiHeadAttention",
     "normalization",
+    "PReLU",
     "PositionalEncoding",
     "pooling",
     "ReLU",
+    "SiLU",
     "scaled_dot_product_attention",
     "Sequential",
     "Sigmoid",
     "Softmax",
     "sparse",
+    "SwiGLU",
     "Tanh",
     "transformer",
     "TransformerBlock",

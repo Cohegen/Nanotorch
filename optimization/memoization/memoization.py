@@ -279,8 +279,13 @@ def _cached_generation_step(x,attention,cache_obj,layer_idx):
     #Updating cache with new K,V
     cache_obj.update(layer_idx,K_heads,V_heads)
 
-    #Retrieving all cached K,V (includes history + new token)
-    K_all,V_all = cache_obj.get(layer_idx)
+    #Retrieving all cached K,V (includes history + new token).
+    # update() writes at seq_pos and advance() happens after all layers finish,
+    # so the current valid length is seq_pos + 1 inside this helper.
+    key_cache, value_cache = cache_obj.caches[layer_idx]
+    valid_len = cache_obj.seq_pos + 1
+    K_all = Tensor(key_cache.data[:, :, :valid_len, :])
+    V_all = Tensor(value_cache.data[:, :, :valid_len, :])
 
     #Compute attention using Q with all cached K,V
     #using .data (numpy) for inference-only operation (no gradients needed)

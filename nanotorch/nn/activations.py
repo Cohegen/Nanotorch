@@ -1,5 +1,5 @@
 """Activation exports."""
 
-from activations.activations import GELU, ReLU, Sigmoid, Softmax, Tanh
+from activations.activations import ELU, GELU, LeakyReLU, Mish, PReLU, ReLU, SiLU, Sigmoid, Softmax, SwiGLU, Tanh
 
-__all__ = ["GELU", "ReLU", "Sigmoid", "Softmax", "Tanh"]
+__all__ = ["ELU", "GELU", "LeakyReLU", "Mish", "PReLU", "ReLU", "SiLU", "Sigmoid", "Softmax", "SwiGLU", "Tanh"]

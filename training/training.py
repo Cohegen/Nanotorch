@@ -1,6 +1,5 @@
 import sched
 import numpy as np
-import pickle
 import time 
 from typing import Dict,List,Optional,Tuple,Any,Callable
 from pathlib import Path 
@@ -13,6 +12,8 @@ from Tensor import Tensor
 from layers.layers import Linear
 from losses.losses import MSELoss,CrossEntropyLoss
 from optimizers.optimizers import SGD,AdamW
+from nanotorch.utils.checkpointing import load_checkpoint as load_training_checkpoint
+from nanotorch.utils.checkpointing import save_checkpoint as save_training_checkpoint
 
 #Constant for learning rate scheduling defaults
 DEFAULT_MAX_LR = 0.1 #default maximum learning rate for cosine schedule
@@ -63,21 +64,21 @@ def clip_grad_norm(parameters:List,max_norm:float = 1.0)->float:
                 grad_data = param.grad.data
             total_norm += np.sum(grad_data**2)
 
-        total_norm = np.sqrt(total_norm)
+    total_norm = np.sqrt(total_norm)
 
-        #clip if necessary
-        if total_norm > max_norm:
-            clip_coef = max_norm / total_norm
-            for param in parameters:
-                if param.grad is not None:
-                    #handle both Tensor gradients and numpy arrays gradients
-                    if isinstance(param.grad,np.ndarray):
-                        param.grad = param.grad * clip_coef
-                    else:
-                        #trusting that Tensor has .data attribute
-                        param.grad.data = param.grad.data * clip_coef
+    #clip if necessary
+    if total_norm > max_norm:
+        clip_coef = max_norm / total_norm
+        for param in parameters:
+            if param.grad is not None:
+                #handle both Tensor gradients and numpy arrays gradients
+                if isinstance(param.grad,np.ndarray):
+                    param.grad = param.grad * clip_coef
+                else:
+                    #trusting that Tensor has .data attribute
+                    param.grad.data = param.grad.data * clip_coef
 
-        return float(total_norm)
+    return float(total_norm)
 
 class Trainer:
     """
@@ -195,8 +196,9 @@ class Trainer:
         # update scheduler
         if self.scheduler is not None:
             current_lr = self.scheduler.get_lr(self.epoch)
-            # update optimizer learning rate
-            self.optimizer.lr = current_lr
+            # update optimizer learning rate across all parameter groups
+            for group in self.optimizer.param_groups:
+                group['lr'] = current_lr
             self.history['learning_rates'].append(current_lr)
 
         self.epoch += 1
@@ -233,8 +235,10 @@ class Trainer:
             if len(outputs.data.shape) >1: #multiclass
                 predictions = np.argmax(outputs.data,axis=1)
                 if len(targets.data.shape) == 1:#integer targets
+                    total += len(targets.data)
                     correct += np.sum(predictions == targets.data)
                 else: #one-hot targets
+                    total += len(targets.data)
                     correct += np.sum(predictions == np.argmax(targets.data,axis=1))
 
 
@@ -253,19 +257,18 @@ class Trainer:
            path:file path to save checkpoint
 
         """
-        checkpoint = {
-            'epoch':self.epoch,
-            'step':self.step,
-            'model_state':self._get_model_state(),
-            'optimizer_state':self._get_optimizer_state(),
-            'scheduler_state':self._get_scheduler_state(),
-            'history':self.history,
-            'training_mode':self.training_mode
-        }
-
-        Path(path).parent.mkdir(parents=True,exist_ok=True)
-        with open(path,'wb') as f:
-            pickle.dump(checkpoint,f)
+        return save_training_checkpoint(
+            path,
+            self.model,
+            optimizer=self.optimizer,
+            epoch=self.epoch,
+            metadata={
+                'step': self.step,
+                'scheduler_state': self._get_scheduler_state(),
+                'history': self.history,
+                'training_mode': self.training_mode,
+            },
+        )
 
     def load_checkpoint(self,path:str):
         """
@@ -274,51 +277,21 @@ class Trainer:
         Args:
             path: file path to load checkpoint from
         """
-        with open(path,'rb') as f:
-            checkpoint = pickle.load(f)
+        checkpoint = load_training_checkpoint(
+            path,
+            model=self.model,
+            optimizer=self.optimizer,
+            strict=True,
+        )
 
-        self.epoch = checkpoint['epoch']
-        self.step = checkpoint['step']
-        self.history = checkpoint['history']
-        self.training_mode = checkpoint['training_mode']
-
-        #restoring states
-        if 'model_state' in checkpoint:
-            self._set_model_state(checkpoint['model_state'])
-        if 'optimizer_state' in checkpoint:
-            self._set_optimizer_state(checkpoint['optimizer_state'])
-        if 'scheduler_state' in checkpoint:
-            self._set_scheduler_state(checkpoint['scheduler_state'])
-
-    def _get_model_state(self):
-        """Extract model parameter for checkpointing"""
-        return {i:param.data.copy() for i,param in enumerate(self.model.parameters())}
-
-    def _set_model_state(self,state):
-        """Restoring model parameters from checkpointing."""
-        for i,param in enumerate(self.model.parameters()):
-            if i in state:
-                param.data = state[i].copy()
-
-    def _get_optimizer_state(self):
-        """Extract optimizer state for checkpoint""" 
-        state ={}
-        #trusting the optimizer has lr attribute
-        state['lr'] = self.optimizer.lr
-
-        if hasattr(self.optimizer,'has_momentum') and self.optimizer.has_momentum():
-            momentum_state = self.optimizer.get_momentum_state()
-            if momentum_state is not None:
-                state['momentum_buffers'] = momentum_state
-        return state 
-
-    def _set_optimizer_state(self,state):
-        """Restore optimizer state from checkpoint"""
-        if 'lr' in state:
-            self.optimizer.lr = state['lr']
-        if 'momentum_buffers' in state:
-            if hasattr(self.optimizer,'has_momentum') and self.optimizer.has_momentum():
-                self.optimizer.set_momentum_state(state['momentum_buffers'])
+        self.epoch = checkpoint.get('epoch', self.epoch)
+        metadata = checkpoint.get('metadata', {})
+        self.step = metadata.get('step', self.step)
+        self.history = metadata.get('history', self.history)
+        self.training_mode = metadata.get('training_mode', self.training_mode)
+        if 'scheduler_state' in metadata:
+            self._set_scheduler_state(metadata['scheduler_state'])
+        return checkpoint
 
     def _get_scheduler_state(self):
         """Extract scheduler state for checkpointing"""
