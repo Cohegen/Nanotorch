@@ -190,7 +190,7 @@ def evaluate(model, images, labels, batch_size=64):
 
 
 def main(
-    epochs=10,
+    epochs=50,
     batch_size=8,
     learning_rate=0.001,
     quick_test=False,

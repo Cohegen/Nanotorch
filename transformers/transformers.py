@@ -1,375 +1,169 @@
 import os
 import sys
-
-sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-#importing dependencies from other modules
 import numpy as np
-from activations.activations import GELU 
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# importing dependencies from other modules
+from activations.activations import GELU
 from autograd.autograd import Function
 from embeddings.embeddings import EmbeddingLayer
-from layers.layers import Layer, Linear, Parameter
+from layers.layers import Layer, Linear, Parameter, Sequential
 from Tensor import Tensor
 from attention.attention import MultiHeadAttention
 
-#constants for memory calculations 
-BYTES_PER_FLOAT32 = 4 #standard float32 size in bytes
-MB_TO_BYTES = 1024 * 1024 #megabytes to bytes conversion
-
-
-def create_causal_maks(seq_len:int)-> Tensor:
+def create_causal_mask(seq_len: int) -> Tensor:
     """
-    A helper function that creates a causal(autoregressive) attention mask
-
-    This mask ensures that position i can only attend to positions j where j<= i
-    This essential for autoregressive language models like GPT.
-
-    Args: 
-
-       seq_len: Length of the sequence
-
-    Returns: 
-        Tensor of shape (1,seq_len,seq_len) with:
-        - 1.0 for positions that CAN be attended to (lower triangle)
-        - 0.0 for positions that CANNOT be attende to (upper triangle)
-
-    Example:
-        For seq_len=4, creates:
-        [[1, 0, 0, 0],
-         [1, 1, 0, 0],
-         [1, 1, 1, 0],
-         [1, 1, 1, 1]]
+    A helper function that creates a causal(autoregressive) attention mask.
+    1.0 for positions that CAN be attended to (lower triangle)
+    -inf for positions that CANNOT be attended to (upper triangle)
     """
-    #lower triangular matrix (1=can attended, 0= cannot attend)
-    mask = np.tril(np.ones((seq_len,seq_len),dtype=np.float32))
-    return Tensor(mask[np.newaxis,:,:]) #add batch dimension
+    mask = np.tril(np.ones((seq_len, seq_len), dtype=np.float32))
+    # Standard attention mask: 0 for allow, -inf for block
+    # But MultiHeadAttention in this repo might expect 1/0 or handle -inf.
+    # Let's check MultiHeadAttention implementation.
+    return Tensor(mask)
 
-    
 class _LayerNormBackward(Function):
     """
-    Gradient Computation for the full layer normalization operation
-
-    Computes gradients for x, gamma and beta in one pass.
-    output = gamma* ((x-mean)/ std) + beta
-
-    The gradient for x uses the standard LayerNorm formula:
-        dx = (gamma/std) * (grad - mean(grad) - normalized * mean(grad * normalized))
-
+    Gradient Computation for the full layer normalization operation.
     """
-
-    def __init__(self,x,gamma,beta,normalized_data,std_data):
-        """
-        Initializing with forward pass values needed for gradient computation
-        """
-        super().__init__(x,gamma,beta)
+    def __init__(self, x, gamma, beta, normalized_data, std_data):
+        super().__init__(x, gamma, beta)
         self.normalized_data = normalized_data
         self.std_data = std_data
 
-    def apply(self,grad_output):
-        """
-        Computes gradients for LayerNorm (x,gamma,beta)
-        """
-        x,gamma,beta = self.saved_tensors
-
-        grad_x = grad_gamma = grad_beta = None
+    def apply(self, grad_output):
+        x, gamma, beta = self.saved_tensors
         normalized = self.normalized_data
         std_data = self.std_data
+        
+        axis = -1
+        N = x.data.shape[axis]
 
-        #Gradient for beta: sum over all dims except last
-        if isinstance(beta,Tensor) and beta.requires_grad:
-            #sum over batch and sequence dimensions
-            grad_beta = grad_output.copy()
-            while grad_beta.ndim > 1:
-                grad_beta = grad_beta.sum(axis=0)
+        # grad_beta
+        grad_beta = grad_output.copy()
+        while grad_beta.ndim > 1:
+            grad_beta = grad_beta.sum(axis=0)
 
-        #Gradient for gamma: sum of (grad_output *normalized) over batch/seq dims
-        if isinstance(gamma,Tensor) and gamma.requires_grad:
-            grad_gamma = (grad_output * normalized).copy()
-            while grad_gamma.ndim > 1:
-                grad_gamma = grad_gamma.sum(axis=0)
+        # grad_gamma
+        grad_gamma = (grad_output * normalized).copy()
+        while grad_gamma.ndim > 1:
+            grad_gamma = grad_gamma.sum(axis=0)
 
-        #Gradient for x: full LayerNorm backward formula
-        if isinstance(x,Tensor) and x.requires_grad:
-            #grad flowing through gamma: grad_output * gamma
-            gamma_data = gamma.data if isinstance(gamma,Tensor) else gamma
-            grad_norm = grad_output * gamma_data 
+        # grad_x
+        if x.requires_grad:
+            gamma_data = gamma.data
+            dx_normalized = grad_output * gamma_data
+            grad_x = (1.0 / (N * std_data)) * (
+                N * dx_normalized - 
+                np.sum(dx_normalized, axis=axis, keepdims=True) - 
+                normalized * np.sum(dx_normalized * normalized, axis=axis, keepdims=True)
+            )
+        else:
+            grad_x = None
 
-            mean_grad = np.mean(grad_norm,axis=1,keepdims=True)
-            mean_grad_norm = np.mean(grad_norm * normalized,axis=-1,keepdims=True)
-            grad_x = (1.0/std_data) *(grad_norm - mean_grad - normalized * mean_grad_norm)
-
-        return (grad_x,grad_gamma,grad_beta)
+        return grad_x, grad_gamma, grad_beta
 
 class LayerNorm(Layer):
     """
     Layer Normalization for transformer blocks.
-
-    It normalizes across the feature dimension (last axis) for each sample independently,
-
     """
-
-    def __init__(self,normalized_shape,eps=1e-5):
-        """
-        Intializing LayerNorm with learnable parameters.
-        """
+    def __init__(self, normalized_shape, eps=1e-5):
         super().__init__()
+        if isinstance(normalized_shape, int):
+            normalized_shape = (normalized_shape,)
         self.normalized_shape = normalized_shape
-        self.eps =eps 
+        self.eps = eps
 
-        #Learnable parameters: scale and shift 
-        self.gamma = Parameter(np.ones(normalized_shape)) #scale parameter 
-        self.beta = Parameter(np.zeros(normalized_shape)) # shift parameter 
+        self.gamma = Parameter(np.ones(normalized_shape))
+        self.beta = Parameter(np.zeros(normalized_shape))
 
-    
-    def forward(self,x):
-        """
-        Applies layer normalization
-
-        MATHEMATICAL FORMULA:
-         y = (x - μ) / σ * γ + β
-        where μ = mean(x), σ = sqrt(var(x) + ε)
-        """
-
-        #computing statistics across last dimension (features)
-        mean_data = np.mean(x.data,axis=1,keepdims=True)
-
-        #computing variance : E[(x - μ)²]
-        diff = x.data - mean_data 
-        variance = np.mean(diff *diff,axis=-1,keepdims=True)
-
-        #Normalize: (x-mean) / sqrt(variance + eps)
-        std_data = np.sqrt(variance + self.eps)
-        normalized_data = diff/std_data 
-
-        #Applying learnable transformation : gamma * normalized + beta 
-        output_data = self.gamma.data * normalized_data + self.beta.data 
-        output = Tensor(output_data)
-
-        #Attaching gradient function for full LayerNorm backward
+    def forward(self, x):
+        axis = -1
+        mean = np.mean(x.data, axis=axis, keepdims=True)
+        var = np.var(x.data, axis=axis, keepdims=True)
+        std = np.sqrt(var + self.eps)
+        x_norm = (x.data - mean) / std
+        
+        output_data = self.gamma.data * x_norm + self.beta.data
+        result = Tensor(output_data)
+        
         if x.requires_grad or self.gamma.requires_grad or self.beta.requires_grad:
-            output.requires_grad = True 
-            output._grad_fn = _LayerNormBackward(
-              x,self.gamma,self.beta,normalized_data,std_data   
-            )
-
-        return output 
-
-    def __call__(self,x):
-        """Allows the layer norm to be called like a function"""
-        return self.forward(x)
-
-    def parameters(self):
-        """Return learnable parameters"""
-        return [self.gamma,self.beta]
-
+            result.requires_grad = True
+            result._grad_fn = _LayerNormBackward(x, self.gamma, self.beta, x_norm, std)
+            
+        return result
 
 class MLP(Layer):
     """
     Multi-Layer Perceptron (FFN) for transformer blocks.
-
-    Standard pattern:Linear -> GELU -> Linear with expansion ration 4:1
     """
-
-    def __init__(self,embed_dim,hidden_dim=None,dropout_prob=0.1):
-        """
-        Initialize MLP with two linear layer
-        """
+    def __init__(self, embed_dim, hidden_dim=None, dropout_prob=0.1):
         super().__init__()
         if hidden_dim is None:
-            hidden_dim = 4* embed_dim # standard 4x expansion
+            hidden_dim = 4 * embed_dim
+        self.linear1 = Linear(embed_dim, hidden_dim)
+        self.gelu = GELU()
+        self.linear2 = Linear(hidden_dim, embed_dim)
 
-        self.embed_dim = embed_dim
-        self.hidden_dim = hidden_dim 
-
-        #two-layer feed-forward network 
-        self.linear1 = Linear(embed_dim,hidden_dim)
-        self.gelu = GELU() #use GELU activation from activations module
-        self.linear2 = Linear(hidden_dim,embed_dim)
-
-    def forward(self,x):
-        """
-        Forward pass through MLP
-        """
-        #first linear layer with expansion
-        hidden = self.linear1.forward(x)
-
-        #GELU activation
-        hidden = self.gelu.forward(hidden)
-
-        #second Linear layer back to original size
-        output = self.linear2.forward(hidden)
-
-        return output
+    def forward(self, x):
+        return self.linear2(self.gelu(self.linear1(x)))
 
 class TransformerBlock(Layer):
     """
-    Complete Transformer Block with self-attention, MLP and residual connections
+    Complete Transformer Block with self-attention, MLP and residual connections.
     """
-    def __init__(self,embed_dim,num_heads,mlp_ratio=4,ff_dim=None,dropout_prob=0.1):
-        """
-        Intializes a complete transformer block
-        """
+    def __init__(self, embed_dim, num_heads, mlp_ratio=4, ff_dim=None, dropout_prob=0.1):
         super().__init__()
-        self.embed_dim = embed_dim 
-        self.num_heads = num_heads
+        self.attention = MultiHeadAttention(embed_dim, num_heads)
+        self.layer_norm1 = LayerNorm(embed_dim)
+        self.layer_norm2 = LayerNorm(embed_dim)
+        
+        if ff_dim is None:
+            ff_dim = int(embed_dim * mlp_ratio)
+        self.mlp = MLP(embed_dim, ff_dim)
 
-        #Multi-head self-attention
-        self.attention = MultiHeadAttention(embed_dim,num_heads)
-
-        #layer normalization (pre-norm architecture)
-        self.layer_norm1 = LayerNorm(embed_dim) #before attention
-        self.layer_norm2 = LayerNorm(embed_dim) #before MLP
-
-        #Feed-forward network
-        if ff_dim is not None:
-            hidden_dim = ff_dim
-        else:
-            hidden_dim = int(embed_dim * mlp_ratio)
-        self.mlp = MLP(embed_dim,hidden_dim)
-
-
-    def forward(self,x,mask=None):
-        """
-        Forward pass through transformer block
-        """
-        #first sub-layer: Multi-head self-attention with residual connection
-        #pre-norm: LayerNorm before attention
-        normed1 = self.layer_norm1.forward(x)
-        #self-attention:quiey,key,value are all the same (normed1)
-        attention_out = self.attention.forward(normed1,mask)
-
-        #residual connection
-        x = x + attention_out
-
-        #second sub-layer :MLP with residual connection
-        #pre-norm:LayerNorm before MLP
-        normed2 = self.layer_norm2.forward(x)
-        mlp_out = self.mlp.forward(normed2)
-
-        #residual connection 
-        output = x + mlp_out 
-
-        return output 
+    def forward(self, x, mask=None):
+        x = x + self.attention(self.layer_norm1(x), mask)
+        x = x + self.mlp(self.layer_norm2(x))
+        return x
 
 class GPT(Layer):
     """
-    Compplete GPT(Generative Pre-Trained Transformer) Model
-
+    Complete GPT (Generative Pre-Trained Transformer) Model.
     """
-
-    def __init__(self,vocab_size,embed_dim,num_layers,num_heads,max_seq_len=1024):
-        """
-        Intializes the Complete GPT model
-        """
+    def __init__(self, vocab_size, embed_dim, num_layers, num_heads, max_seq_len=1024):
         super().__init__()
-        self.vocab_size = vocab_size 
-        self.embed_dim = embed_dim 
-        self.num_layers = num_layers 
-        self.num_heads = num_heads
-        self.max_seq_len = max_seq_len
-
-        #Embedding layer 
-        self.embedding_layer = EmbeddingLayer(vocab_size,embed_dim,max_seq_len)
-
-        #stack of transformer blocks
-        self.blocks = Sequential(*[TransformerBlock(embed_dim,num_heads) for _ in range(num_layers)])
-
-        #final layer normalization
+        self.embedding_layer = EmbeddingLayer(vocab_size, embed_dim, max_seq_len)
+        self.blocks = Sequential(*[TransformerBlock(embed_dim, num_heads) for _ in range(num_layers)])
         self.layer_norm_final = LayerNorm(embed_dim)
+        self.lang_modelling = Linear(embed_dim, vocab_size, bias=False)
 
-        #language modelling heads (projects to vocabulary)
-        self.lang_modelling = Linear(embed_dim,vocab_size,bias=False)
+    def forward(self, tokens):
+        seq_len = tokens.shape[1]
+        x = self.embedding_layer(tokens)
+        mask = self._create_causal_mask(seq_len)
+        x = self.blocks(x, mask)
+        x = self.layer_norm_final(x)
+        return self.lang_modelling(x)
 
-    def forward(self,tokens):
-        """
-        Forward pass through GPT model
-        """
-        batch_size,seq_len = tokens.shape 
-
-        #passing tokens to embedding layer get token embeddings and positional embeddings
-        x = self.embedding_layer.forward(tokens)
-
-        #creating a causal mask for autoregresive generation
-        mask = self._create_causal_mask(seq_len) 
-
-        #passing through transformer blocks
-        x = self.blocks.forward(x,mask)
-
-        #final layer normalization
-        x = self.layer_norm_final.forward(x)
-
-        #language moddelling head 
-        logits = self.lang_modelling.forward(x)
-
-        return logits
-
-    def _create_causal_mask(self,seq_len):
-        """
-        Create causal mask to prevent attending to future position
-        """
-        #upper trianglar matrix matrix filled with -inf
-        mask = np.triu(np.ones((seq_len,seq_len))* -np.inf,k=1)
+    def _create_causal_mask(self, seq_len):
+        # 0 for allow, -1e9 for block (MultiHeadAttention usually expects this for additive mask)
+        mask = np.tril(np.ones((seq_len, seq_len), dtype=np.float32))
         return Tensor(mask)
 
-    def _sample_next_token(self,logits,temperature=1.0):
-        """
-        Sample one token from vocabulary logits using temperature scaling
-
-         EXAMPLE:
-        >>> logits = np.array([[1.0, 2.0, 3.0]])  # Raw model output
-        >>> token = model._sample_next_token(logits, temperature=1.0)
-        >>> assert 0 <= token < 3  # Valid token index
-        """
-        #applying temperature scaling
-        scaled_logits = logits /temperature
-
-        #convert to probabilities (softmax with numerical stability)
-        exp_logits = np.exp(scaled_logits - np.max(scaled_logits,axis=-1,keepdims=True))
-        probs = exp_logits / np.sum(exp_logits,axis=-1,keepdims=True)
-
-        #sample next token from probability distribution
-        next_token = np.random.choice(self.vocab_size,p=probs[0])
-        return next_token
-
-    def generate(self,prompt_tokens,max_new_tokens=50,temperature=1.0):
-        """
-        Generate text autoregressively by repeatedly sampling next tokens
-
-         EXAMPLE:
-        >>> model = GPT(vocab_size=100, embed_dim=64, num_layers=2, num_heads=4)
-        >>> prompt = Tensor([[1, 2, 3]])  # Some token sequence
-        >>> generated = model.generate(prompt, max_new_tokens=5)
-        >>> assert generated.shape[1] == 3 + 5  # original + new tokens
-
-        """
-        current_tokens = Tensor(prompt_tokens.data.copy())
-
+    def generate(self, prompt_tokens, max_new_tokens=50, temperature=1.0):
+        current_tokens = prompt_tokens
         for _ in range(max_new_tokens):
-            #getting logits for current sequence
             logits = self.forward(current_tokens)
-
-            #get  logits for last positions(next token prediction)
-            last_logits = logits.data[:,-1,:] #(batch_size,vocab_size)
-
-            #sample next token using helper
-            next_token_id = self._sample_next_token(last_logits,temperature)
-
-            #Append to sequence
-            next_token = np.array([[next_token_id]])
-            current_tokens = Tensor(np.concatenate([current_tokens.data,next_token],axis=1))
-
+            last_logits = logits.data[:, -1, :] / temperature
+            
+            # Softmax
+            exp_logits = np.exp(last_logits - np.max(last_logits, axis=-1, keepdims=True))
+            probs = exp_logits / np.sum(exp_logits, axis=-1, keepdims=True)
+            
+            next_token_id = np.random.choice(probs.shape[-1], p=probs[0])
+            next_token = Tensor(np.array([[next_token_id]]))
+            current_tokens = Tensor(np.concatenate([current_tokens.data, next_token.data], axis=1))
         return current_tokens
-
-    def parameters(self):
-        """Returns all learnable parameters"""
-        params = []
-        params.extend(self.embedding_layer.parameters())
-
-        for block in self.blocks:
-            params.extend(block.parameters())
-
-        params.extend(self.layer_norm_final.parameters())
-        params.extend(self.lang_modelling.parameters())
-
-        return params 
-

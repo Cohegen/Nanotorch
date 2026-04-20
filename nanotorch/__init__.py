@@ -4,6 +4,7 @@ from Tensor.tensor import Tensor
 
 from . import autograd, nn, optim, optimization, tokenization, training, utils
 from .utils import load_checkpoint, load_state_dict, save_checkpoint, save_state_dict
+from .utils import manual_seed, seed_everything
 
 
 def tensor(data, requires_grad=False):
@@ -19,8 +20,10 @@ __all__ = [
     "optimization",
     "load_checkpoint",
     "load_state_dict",
+    "manual_seed",
     "save_checkpoint",
     "save_state_dict",
+    "seed_everything",
     "tensor",
     "tokenization",
     "training",

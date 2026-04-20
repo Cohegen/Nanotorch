@@ -903,9 +903,27 @@ def enable_autograd(quiet=False):
         _original_init(self,data)
         self.requires_grad = requires_grad
         self.grad = None
+        self.hooks = []
 
     #replace __init_ with gradient-aware version
     Tensor.__init__ = gradient_aware_init
+
+    def register_hook(self, hook):
+        """
+        Registers a backward hook.
+        The hook will be called every time a gradient with respect to the tensor is computed.
+        The hook should have the following signature:
+            hook(grad) -> Tensor or None
+        """
+        self.hooks.append(hook)
+        return len(self.hooks) - 1
+
+    def _apply_hooks(self, grad):
+        for hook in self.hooks:
+            new_grad = hook(grad)
+            if new_grad is not None:
+                grad = new_grad
+        return grad
 
     #store original operations
     #these are guaranteed to exist from the Tensor module

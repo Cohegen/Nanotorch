@@ -68,7 +68,9 @@ class EmbeddingBackward(Function):
         return (grad_weight,)
 
 
-class Embedding:
+from layers.layers import Layer, Parameter
+
+class Embedding(Layer):
     """
     Leanable embedding layer that maps token indices to dense vectors.
 
@@ -84,13 +86,14 @@ class Embedding:
             embed_dim:dimension of embedding vectors
 
         """
+        super().__init__()
         # store configuration
         self.vocab_size = vocab_size
         self.embed_dim = embed_dim
 
         # Xavier Glorot initialization for better gradient flow
         limit = math.sqrt(6.0 / (vocab_size + embed_dim))
-        self.weight = Tensor(
+        self.weight = Parameter(
             np.random.uniform(
                 -limit, limit, (vocab_size, embed_dim)
             )
@@ -128,7 +131,7 @@ class Embedding:
         # EmbeddingBackward will handle sparse gradient accumulation
         if self.weight.requires_grad:
             result.requires_grad = True
-            result.__grad_fn = EmbeddingBackward(self.weight, indices)
+            result._grad_fn = EmbeddingBackward(self.weight, indices)
 
         return result 
 

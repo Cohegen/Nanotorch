@@ -8,7 +8,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np
 import pytest
 from Tensor.tensor import Tensor
+from layers.layers import Linear
+from optimizers.optimizers import SGD
 from training.training import CosineSchedule, clip_grad_norm
+from losses.losses import MSELoss
+from training.training import Trainer
 
 
 class TestCosineSchedule:
@@ -70,3 +74,45 @@ class TestClipGradNorm:
         p2.grad = None
         # Should not raise
         clip_grad_norm([p1, p2], max_norm=1.0)
+
+
+class _SingleLinearModel:
+    def __init__(self):
+        self.layer = Linear(1, 1)
+
+    def forward(self, x):
+        return self.layer(x)
+
+    def parameters(self):
+        return self.layer.parameters()
+
+
+class TestTrainerValidation:
+    def test_train_epoch_updates_history(self):
+        model = _SingleLinearModel()
+        optimizer = SGD(model.parameters(), lr=0.01)
+        trainer = Trainer(model, optimizer, MSELoss(), grad_clip_norm=1.0)
+
+        x = Tensor(np.array([[1.0], [2.0]], dtype=np.float32))
+        y = Tensor(np.array([[0.0], [1.0]], dtype=np.float32))
+        dataloader = [(x, y)]
+
+        avg_loss = trainer.train_epoch(dataloader)
+
+        assert avg_loss >= 0.0
+        assert len(trainer.history["train_loss"]) == 1
+
+    def test_evaluate_raises_on_nonfinite_loss(self):
+        class BadLoss:
+            def forward(self, outputs, targets):
+                return Tensor(np.array(np.nan, dtype=np.float32))
+
+        model = _SingleLinearModel()
+        optimizer = SGD(model.parameters(), lr=0.01)
+        trainer = Trainer(model, optimizer, BadLoss(), raise_on_nonfinite=True)
+
+        x = Tensor(np.array([[1.0]], dtype=np.float32))
+        y = Tensor(np.array([[0.0]], dtype=np.float32))
+
+        with pytest.raises(ValueError):
+            trainer.evaluate([(x, y)])

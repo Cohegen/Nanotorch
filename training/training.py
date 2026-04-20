@@ -14,6 +14,11 @@ from losses.losses import MSELoss,CrossEntropyLoss
 from optimizers.optimizers import SGD,AdamW
 from nanotorch.utils.checkpointing import load_checkpoint as load_training_checkpoint
 from nanotorch.utils.checkpointing import save_checkpoint as save_training_checkpoint
+from nanotorch.utils.validation import (
+    assert_finite_parameters,
+    assert_finite_tensor,
+    collect_gradient_issues,
+)
 
 #Constant for learning rate scheduling defaults
 DEFAULT_MAX_LR = 0.1 #default maximum learning rate for cosine schedule
@@ -90,7 +95,7 @@ class Trainer:
     This is the central class that brings together all the
     components we've built in other modules
     """
-    def __init__(self,model,optimizer,loss_fn,scheduler=None,grad_clip_norm=None):
+    def __init__(self,model,optimizer,loss_fn,scheduler=None,grad_clip_norm=None,raise_on_nonfinite=True):
         """
         Intialize trainer with model and training components
 
@@ -107,11 +112,16 @@ class Trainer:
         self.loss_fn =loss_fn
         self.scheduler = scheduler
         self.grad_clip_norm = grad_clip_norm
+        self.raise_on_nonfinite = raise_on_nonfinite
 
         #training state 
         self.epoch =0
         self.step =0
         self.training_mode = True 
+        self.last_gradient_issues = {
+            'missing_grad_indices': [],
+            'nonfinite_grad_indices': [],
+        }
 
         #history tracking
         self.history = {
@@ -145,6 +155,8 @@ class Trainer:
             # forward pass
             outputs = self.model.forward(inputs)
             loss = self.loss_fn.forward(outputs, targets)
+            if self.raise_on_nonfinite:
+                assert_finite_tensor(loss, name="loss")
 
             # scale loss for accumulation
             batch_loss = loss.data if isinstance(loss.data, (float, np.float32, np.float64)) else loss.data.item()
@@ -163,8 +175,16 @@ class Trainer:
                     params = self.model.parameters()
                     clip_grad_norm(params, self.grad_clip_norm)
 
+                self.last_gradient_issues = collect_gradient_issues(self.model.parameters())
+                if self.raise_on_nonfinite and self.last_gradient_issues['nonfinite_grad_indices']:
+                    raise ValueError(
+                        f"Encountered non-finite gradients: {self.last_gradient_issues['nonfinite_grad_indices']}"
+                    )
+
                 # optimizer step
                 self.optimizer.step()
+                if self.raise_on_nonfinite:
+                    assert_finite_parameters(self.model)
                 self.optimizer.zero_grad()
 
                 total_loss += accumulated_loss / accumulation_steps
@@ -184,7 +204,15 @@ class Trainer:
                 params = self.model.parameters()
                 clip_grad_norm(params, self.grad_clip_norm)
 
+            self.last_gradient_issues = collect_gradient_issues(self.model.parameters())
+            if self.raise_on_nonfinite and self.last_gradient_issues['nonfinite_grad_indices']:
+                raise ValueError(
+                    f"Encountered non-finite gradients: {self.last_gradient_issues['nonfinite_grad_indices']}"
+                )
+
             self.optimizer.step()
+            if self.raise_on_nonfinite:
+                assert_finite_parameters(self.model)
             self.optimizer.zero_grad()
             total_loss += accumulated_loss / remaining_steps
             num_updates += 1
@@ -227,6 +255,8 @@ class Trainer:
             #forward pass only
             outputs = self.model.forward(inputs)
             loss = self.loss_fn.forward(outputs,targets)
+            if self.raise_on_nonfinite:
+                assert_finite_tensor(loss, name="eval_loss")
 
             total_loss += loss.data
             num_batches += 1

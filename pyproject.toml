@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nanotorch"
+version = "0.1.0"
+description = "Educational deep learning framework built from first principles in pure Python."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = [
+    "Tensor*",
+    "activations*",
+    "attention*",
+    "autograd*",
+    "convolution*",
+    "dataloader*",
+    "embeddings*",
+    "layers*",
+    "losses*",
+    "nanotorch*",
+    "nanotorchvision*",
+    "optimization*",
+    "optimizers*",
+    "tokenization*",
+    "training*",
+    "transformers*",
+]

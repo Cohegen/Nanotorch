@@ -252,7 +252,7 @@ class Dropout(Layer):
     def __repr__(self):
         return f"Dropout(p={self.p})"
 
-class Sequential:
+class Sequential(Layer):
     """
     A container that chains layers together sequentially.
 
@@ -260,32 +260,48 @@ class Sequential:
 
     def __init__(self, *layers):
         """Initialize with layers to chain together"""
+        super().__init__()
         #accepting both Sequential(layer1,layer2) and Sequential([layer1,layer2])
         if len(layers) == 1 and isinstance(layers[0],(list,tuple)):
-            self.layers =list(layers[0])
+            self.layers = list(layers[0])
         else:
             self.layers = list(layers)
-        self.training = True
+        
+        # Register layers as modules for parameters() and train() to work
+        for i, layer in enumerate(self.layers):
+            if isinstance(layer, Layer):
+                self._modules[str(i)] = layer
 
-    def train(self):
+    def train(self, mode=True):
         """Sets all layers to training mode."""
-        self.training = True
+        self.training = mode
         for layer in self.layers:
             if hasattr(layer, 'train'):
-                layer.train()
+                # Handle both Layer.train(mode) and Sequential.train() if it wasn't updated
+                try:
+                    layer.train(mode)
+                except TypeError:
+                    if mode:
+                        layer.train()
+                    else:
+                        layer.eval()
 
     def eval(self):
         """Sets all layers to evaluation mode."""
-        self.training = False
-        for layer in self.layers:
-            if hasattr(layer, 'eval'):
-                layer.eval()
+        return self.train(False)
 
-    def forward(self,x):
+    def forward(self, x):
         """Forward pass through all layers sequentially."""
         for layer in self.layers:
+            # Check if layer expects training argument (old Dropout style) or uses self.training
             if isinstance(layer, Dropout):
-                x = layer.forward(x, training=self.training)
+                # Check if Dropout.forward still takes training=...
+                import inspect
+                sig = inspect.signature(layer.forward)
+                if 'training' in sig.parameters:
+                    x = layer.forward(x, training=self.training)
+                else:
+                    x = layer.forward(x)
             else:
                 x = layer.forward(x)
         return x

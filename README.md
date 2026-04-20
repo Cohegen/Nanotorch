@@ -14,8 +14,21 @@ NanoTorch pulls back the curtain. By stripping away the complexity and focusing 
 - **Tensor Foundations:** Understanding how multidimensional arrays and broadcast operations form the bedrock of AI.
 - **Architectural Anatomy:** Constructing everything from basic Linear layers to complex Multi-Head Attention mechanisms from the ground up.
 - **Optimization Intuition:** Implementing algorithms like Adam and SGD to see exactly how they steer weights through the loss landscape.
+- **Dynamic Visualization:** Visualize the computational graph as it builds, providing a clear map of how data and gradients flow through your models.
 
 Whether you're a student trying to bridge the gap between theory and code, or an engineer looking to deepen your architectural understanding, NanoTorch is built to be read, tinkered with, and understood.
+
+## NanoTorch 1.3: The "Glass Box" Update
+
+The 1.3 release focuses on framework reliability, architectural consistency, and visualization.
+
+### Key Updates:
+- **Unified Layer System:** All modules (Linear, Conv2d, BatchNorm, etc.) now inherit from a common `Layer` base class, enabling consistent `state_dict()` and parameter management.
+- **Computational Graph Visualization:** New `nanotorch.utils.visualization` module allows exporting the dynamic graph to Graphviz DOT format.
+- **Vectorized Pooling:** `MaxPool2d` and `AvgPool2d` have been fully vectorized using NumPy stride tricks, removing slow Python loops.
+- **Expanded Functional API:** Added `nanotorch.nn.functional` with stateless versions of all activations and loss functions.
+- **Autograd Enhancements:** Added support for **Gradient Hooks** (`register_hook`) to inspect or modify gradients during backpropagation.
+- **Structured Metrics:** New `nanotorch.utils.metrics` module for `accuracy`, `f1_score`, and `confusion_matrix`.
 
 ## Why NanoTorch
 - Pure Python implementation of tensors, autograd, layers, optimizers, and training loops.
@@ -36,9 +49,26 @@ This repository intends to showcase the implementation of PyTorch, one of the mo
 ```powershell
 git clone https://github.com/Cohegen/NanoTorch.git
 cd NanoTorch
-python -m venv .venv
+py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install numpy matplotlib
+pip install -r requirements.txt
+```
+
+For tests and framework validation:
+
+```powershell
+pip install -r requirements-dev.txt
+python scripts/smoke_test.py
+pytest
+```
+
+If an older local venv is broken, recreate it instead of reusing the launcher:
+
+```powershell
+Remove-Item -Recurse -Force .venv
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
 ```
 
 Run a simple benchmark:
@@ -196,6 +226,17 @@ Benchmarks are meant to show how the framework behaves during training, not to a
 - Leaderboard generator: `projects/CNNS/generate_leaderboard.py`
 
 Use the CSV and JSON files in `projects/CNNS/plots/` as the authoritative source for exact benchmark values.
+
+## Framework Priorities
+
+The current recommended path is:
+
+- import through `nanotorch` for package-style usage
+- use `requirements.txt` or `requirements-dev.txt` for environment setup
+- run `python scripts/smoke_test.py` after setup changes
+- keep behavioral fixes in the original implementation folders, not only in compatibility wrappers
+
+Priority order for follow-on framework work is tracked in `docs/IMPROVEMENT_ROADMAP.md`.
 
 ## Collaboration
 I'm open for collaboration on this project and also in the future when I implement this project in either pure C or C++.
