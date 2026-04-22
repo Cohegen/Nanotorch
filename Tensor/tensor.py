@@ -194,19 +194,7 @@ class Tensor():
         a = self.data
         b = other.data
 
-        #handling 2D matrices with loops
-        if len(a.shape) == 2 and len(b.shape) == 2:
-            M, K = a.shape
-            K2, N = b.shape
-            result_data = np.zeros((M,N),dtype=a.dtype)
-
-            for i in range(M):
-                for j in range(N):
-                    #dot product of row i from A with column j from B
-                    result_data[i,j] =  np.dot(a[i,:],b[:,j]) 
-        else:
-            #for batches operation tensors with 3 or above dimensions
-            result_data = np.matmul(a,b)
+        result_data = np.matmul(a,b)
 
         return Tensor(result_data)
 

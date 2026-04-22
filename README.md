@@ -30,6 +30,12 @@ The 1.3 release focuses on framework reliability, architectural consistency, and
 - **Autograd Enhancements:** Added support for **Gradient Hooks** (`register_hook`) to inspect or modify gradients during backpropagation.
 - **Structured Metrics:** New `nanotorch.utils.metrics` module for `accuracy`, `f1_score`, and `confusion_matrix`.
 
+## Recent Performance Updates
+
+- `Tensor.matmul()` now uses NumPy's vectorized `np.matmul` path for non-scalar matrix multiplication, which removes an older Python loop bottleneck from linear algebra-heavy workloads.
+- `Dataloader` now batches `TensorDataset` inputs with direct tensor indexing, reducing Python overhead and temporary object creation during training.
+- `Conv2d` now reuses cached `im2col` projections and reshaped weights during the fast backward path, cutting redundant convolution setup work in training runs.
+
 ## Why NanoTorch
 - Pure Python implementation of tensors, autograd, layers, optimizers, and training loops.
 - Built to expose the mechanics behind backpropagation instead of hiding them behind optimized kernels.

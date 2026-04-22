@@ -8,7 +8,25 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from activations.activations import ELU, GELU, LeakyReLU, Mish, PReLU, ReLU, SiLU, Sigmoid, Softmax, SwiGLU, Tanh
-from attention.attention import MultiHeadAttention, scaled_dot_product_attention
+from attention.attention import (
+    FlashMultiHeadAttention,
+    FlashMultiHeadAttentionV2,
+    FlashMultiHeadAttentionV3,
+    GroupedQueryAttention,
+    LinearMultiHeadAttention,
+    MultiHeadAttention,
+    MultiLatentAttention,
+    MultiQueryAttention,
+    PagedMultiHeadAttention,
+    SparseMultiHeadAttention,
+    flash_attention,
+    flash_attention_v2,
+    flash_attention_v3,
+    linear_attention,
+    paged_attention,
+    scaled_dot_product_attention,
+    sparse_attention,
+)
 from convolution.convolutions import AvgPool2d, BatchNorm2d, Conv2d, MaxPool2d
 from embeddings.embeddings import (
     Embedding,
@@ -19,8 +37,7 @@ from embeddings.embeddings import (
 from layers.layers import Dropout, Layer, Linear, Sequential
 from losses.losses import BinaryCrossEntropyLoss, CrossEntropyLoss, MSELoss, log_softmax
 from transformers.transformers import GPT, LayerNorm, MLP, TransformerBlock, create_causal_mask
-
-import activations, attention, embeddings, functional, losses, modules, transformer
+from . import activations, attention, embeddings, functional, losses, modules, transformer
 
 Module = Layer
 
@@ -53,10 +70,25 @@ __all__ = [
     "Module",
     "MSELoss",
     "MultiHeadAttention",
+    "FlashMultiHeadAttention",
+    "FlashMultiHeadAttentionV2",
+    "FlashMultiHeadAttentionV3",
+    "GroupedQueryAttention",
+    "MultiQueryAttention",
+    "MultiLatentAttention",
+    "SparseMultiHeadAttention",
+    "LinearMultiHeadAttention",
+    "PagedMultiHeadAttention",
     "PReLU",
     "PositionalEncoding",
     "ReLU",
     "SiLU",
+    "flash_attention",
+    "flash_attention_v2",
+    "flash_attention_v3",
+    "sparse_attention",
+    "linear_attention",
+    "paged_attention",
     "scaled_dot_product_attention",
     "Sequential",
     "Sigmoid",
@@ -65,6 +97,6 @@ __all__ = [
     "Tanh",
     "transformer",
     "TransformerBlock",
-    "create_causal_maks",
+    "create_causal_mask",
     "create_sinusoidal_embeddings",
 ]

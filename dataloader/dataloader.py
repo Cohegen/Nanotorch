@@ -122,12 +122,18 @@ class Dataloader:
         Returns iterator over batches.
         """
         #creating list of indices
-        indices = list(range(len(self.dataset)))
+        indices = np.arange(len(self.dataset))
 
         #shuffle if requested
         if self.shuffle:
             # Use NumPy RNG so `np.random.seed(...)` controls determinism.
             np.random.shuffle(indices)
+
+        if isinstance(self.dataset, TensorDataset):
+            for i in range(0, len(indices), self.batch_size):
+                batch_indices = indices[i:i+self.batch_size]
+                yield tuple(Tensor(tensor.data[batch_indices]) for tensor in self.dataset.tensors)
+            return
 
         #yield batches
         for i in range(0,len(indices),self.batch_size):

@@ -1,5 +1,11 @@
 ## Introduction to Convolutions
 
+## Recent Performance Update
+
+- The fast `im2col` convolution path now reuses cached column projections and reshaped weights during backpropagation.
+- This avoids repeating expensive forward-side setup work when computing convolution gradients.
+- The explicit loop implementation is still kept for education and comparison, but the optimized `im2col` path is the recommended runtime path.
+
 ### 1. Introduction to Spatial Operations
 
 Spatial operations transform machine learning from working with simple vectors to understanding images and spatial patterns. When we look at a photo, our brains process spatial relationships—edges, textures, and objects. Spatial operations give neural networks a similar capability.
@@ -190,7 +196,6 @@ Dense(3072→1000) = 3M params       Conv2d(3→16, 3×3) = 448 params
 No spatial awareness               Preserves spatial relationships
 Massive parameter count            Parameter sharing across space
 ```
-<<<<<<< Updated upstream
 # Weight Initialization: He (Kaiming) Initialization
 
 In our **Conv2d** layers, we use **He initialization** (also known as Kaiming initialization). This method is specifically optimized for deep neural networks using **ReLU** activation functions.
@@ -219,7 +224,6 @@ $n_{in}$ = channels x kernel_height x kernel_width
 
 ---
 
-======
 ### Weight Initialization: He Initialization for ReLU Networks
 
 Our Conv2d uses **He initialization**, which is designed for ReLU activations:
@@ -278,7 +282,6 @@ Average pooling computes the mean of each window, creating smoother and more gen
 ![Alt text](https://github.com/Cohegen/Nanotorch/blob/main/assets/avg_pooling.png)
 
 
->>>>>>> Stashed changes
 ```
 AvgPool2d Example (same 2×2 kernel, stride=2):
 Input (4×4):              Output (2×2):
@@ -376,7 +379,6 @@ BatchNorm ensures that each neuron receives well-scaled inputs, making gradient 
 Given a mini-batch of size \(m\):
 
 1. **Compute the batch mean for each neuron**:
-<<<<<<< Updated upstream
 $\[
 \mu_B = \frac{1}{m}\sum_{i=1}^{m} x_i
 \]$
@@ -400,7 +402,6 @@ y_i = \gamma \hat{x}_i + \beta
 
 - $\(\gamma\)$ → scales the normalized output  
 - $\(\beta\)$ → shifts the normalized output  
-=======
 $\[
 \mu_B = \frac{1}{m}\sum_{i=1}^{m} x_i
 \]$
@@ -457,7 +458,5 @@ Training Mode:                      Eval Mode:
 Computes μ, σ² from                Uses frozen μ, σ² for
 current batch                      consistent inference
 ```
-<<<<<<< Updated upstream
 ```
-=======
 ```

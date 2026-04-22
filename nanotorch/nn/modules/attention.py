@@ -1,5 +1,41 @@
 """PyTorch-style attention module exports."""
 
-from attention.attention import MultiHeadAttention, scaled_dot_product_attention
+from attention.attention import (
+    FlashMultiHeadAttention,
+    FlashMultiHeadAttentionV2,
+    FlashMultiHeadAttentionV3,
+    GroupedQueryAttention,
+    LinearMultiHeadAttention,
+    MultiHeadAttention,
+    MultiLatentAttention,
+    MultiQueryAttention,
+    PagedMultiHeadAttention,
+    SparseMultiHeadAttention,
+    flash_attention,
+    flash_attention_v2,
+    flash_attention_v3,
+    linear_attention,
+    paged_attention,
+    scaled_dot_product_attention,
+    sparse_attention,
+)
 
-__all__ = ["MultiHeadAttention", "scaled_dot_product_attention"]
+__all__ = [
+    "MultiHeadAttention",
+    "FlashMultiHeadAttention",
+    "FlashMultiHeadAttentionV2",
+    "FlashMultiHeadAttentionV3",
+    "GroupedQueryAttention",
+    "MultiQueryAttention",
+    "MultiLatentAttention",
+    "SparseMultiHeadAttention",
+    "LinearMultiHeadAttention",
+    "PagedMultiHeadAttention",
+    "scaled_dot_product_attention",
+    "flash_attention",
+    "flash_attention_v2",
+    "flash_attention_v3",
+    "sparse_attention",
+    "linear_attention",
+    "paged_attention",
+]
