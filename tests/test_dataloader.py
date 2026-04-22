@@ -99,6 +99,17 @@ class TestDataloader:
         x_last, _ = batches[-1]
         assert x_last.shape[0] == 1
 
+    def test_tensordataset_batch_matches_direct_indexing(self):
+        x = Tensor(np.arange(24, dtype=np.float32).reshape(8, 3))
+        y = Tensor(np.arange(8, dtype=np.float32))
+        ds = TensorDataset(x, y)
+        dl = Dataloader(ds, batch_size=4, shuffle=False)
+
+        x_batch, y_batch = next(iter(dl))
+
+        np.testing.assert_array_equal(x_batch.data, x.data[:4])
+        np.testing.assert_array_equal(y_batch.data, y.data[:4])
+
 
 class TestRandomHorizontalFlip:
     def test_output_shape(self):

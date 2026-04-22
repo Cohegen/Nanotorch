@@ -212,6 +212,13 @@ class TestTensorMatmul:
         expected = np.array([[19, 22], [43, 50]], dtype=np.float32)
         np.testing.assert_array_almost_equal(c.data, expected)
 
+    def test_matmul_batched(self):
+        a = Tensor(np.arange(12, dtype=np.float32).reshape(2, 2, 3))
+        b = Tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4))
+        c = a.matmul(b)
+        expected = np.matmul(a.data, b.data)
+        np.testing.assert_array_almost_equal(c.data, expected)
+
     def test_matmul_operator(self):
         a = Tensor([[1, 0], [0, 1]])
         b = Tensor([[5, 6], [7, 8]])

@@ -1,5 +1,11 @@
 # Introduction to the Quantization Module
 
+## Recent Performance Note
+
+- This optimization pass did not change the quantization algorithms in `quantization.py` directly.
+- The recent runtime work still helps quantization-related workflows indirectly: faster tensor matmul improves FP32 baseline paths, faster dataloader batching reduces calibration and evaluation overhead, and faster convolution backprop helps models that are profiled before or after quantization experiments.
+- In short, quantization behavior stays the same, but the surrounding training and benchmarking pipeline is lighter.
+
 This document walks through quantization **in order**: from *why* it exists, to the *math*, to *tensor* → *layer* → *full model* behavior, and finally to *production-style* variants. Read top to bottom once for a full picture, or jump using the roadmap below.
 
 ## How to read this guide (step-by-step path)

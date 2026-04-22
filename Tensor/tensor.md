@@ -1,5 +1,11 @@
 # Tensors: The Foundation of Deep Learning
 
+## Recent Performance Update
+
+- `Tensor.matmul()` now routes matrix multiplication through NumPy's `np.matmul` for all non-scalar cases.
+- This removes the old Python nested-loop path for 2D matrix multiply and pushes the work into BLAS-backed vectorized kernels.
+- Practical effect: linear layers, attention score products, and any batched tensor matmul now benefit from the faster backend path automatically.
+
 A **Tensor** is the fundamental data structure used in machine learning and deep learning. At its core, it is a multi-dimensional array of numbers that serves as the building block for all data representation and transformation in neural networks.
 
 ---

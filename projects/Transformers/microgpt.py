@@ -99,7 +99,7 @@ class Head(Layer):
 
         softmax = Softmax()
         wei = softmax.forward(wei, dim=-1)
-        wei = self.dropout(wei, training=self.training)
+        wei = self.dropout(wei)
         
         v = self.value(x) # (B,T,head_dim)
         out = wei @ v # (B,T,T) @ (B,T,head_dim) -> (B,T,head_dim)
@@ -117,9 +117,9 @@ class MultiHeadAttention(Layer):
         self.heads = [Head(head_dim) for _ in range(num_heads)]
         self.proj = Linear(embed_dim, embed_dim)
 
-    def train(self):
-        super().train()
-        for h in self.heads: h.train()
+    def train(self, mode=True):
+        super().train(mode)
+        for h in self.heads: h.train(mode)
 
     def eval(self):
         super().eval()
@@ -153,9 +153,9 @@ class FeedForward(Layer):
             Dropout(dropout)
         )
 
-    def train(self):
-        super().train()
-        self.net.train()
+    def train(self, mode=True):
+        super().train(mode)
+        self.net.train(mode)
 
     def eval(self):
         super().eval()
@@ -179,10 +179,10 @@ class Block(Layer):
         self.ln1 = LayerNorm(embed_dim)
         self.ln2 = LayerNorm(embed_dim)
 
-    def train(self):
-        super().train()
-        self.sa.train()
-        self.ffwd.train()
+    def train(self, mode=True):
+        super().train(mode)
+        self.sa.train(mode)
+        self.ffwd.train(mode)
 
     def eval(self):
         super().eval()
@@ -206,9 +206,9 @@ class NanoLanguageModel(Layer):
         self.ln_f = LayerNorm(embed_dim)
         self.lm_head = Linear(embed_dim, vocab_size)
 
-    def train(self):
-        super().train()
-        self.blocks.train()
+    def train(self, mode=True):
+        super().train(mode)
+        self.blocks.train(mode)
 
     def eval(self):
         super().eval()

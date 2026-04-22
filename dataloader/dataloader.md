@@ -1,6 +1,12 @@
 
 ## Understanding the Data Pipeline
 
+## Recent Performance Update
+
+- `Dataloader` now uses a direct indexing fast-path when the dataset is a `TensorDataset`.
+- Instead of materializing each sample one by one in Python and then stacking them, batches are sliced straight from the underlying tensor storage.
+- Practical effect: less Python overhead, fewer temporary objects, and faster batch construction during training.
+
 ## The Data Pipeline Journey
 Imagine you have 50,000 images of cats and dogs, you want to train a neural network to classify them:
 

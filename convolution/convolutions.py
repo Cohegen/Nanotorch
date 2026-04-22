@@ -134,7 +134,18 @@ class Conv2dBackward(Function):
     grad_bias is gradient wrt bias (for bias updates)
     """
 
-    def __init__(self, x, weight, bias, stride, padding, kernel_size, method='im2col'):
+    def __init__(
+        self,
+        x,
+        weight,
+        bias,
+        stride,
+        padding,
+        kernel_size,
+        method='im2col',
+        cached_x_cols=None,
+        cached_weight_matrix=None,
+    ):
         # Registering all tensors that neeed gradients with autograd
         if bias is not None:
             super().__init__(x, weight, bias)
@@ -147,6 +158,8 @@ class Conv2dBackward(Function):
         self.padding = padding
         self.kernel_size = kernel_size
         self.method = method
+        self.cached_x_cols = cached_x_cols
+        self.cached_weight_matrix = cached_weight_matrix
 
     def apply(self, grad_output):
         """
@@ -237,13 +250,17 @@ class Conv2dBackward(Function):
             # Need x_cols from forward pass. Since we don't store it in backward object for memory, 
             # we recompute it or rely on a stored version if we decide to cache it.
             # Recomputing for simplicity (matches standard autograd patterns)
-            x_cols = im2col(self.x.data, kernel_h, kernel_w, self.stride, self.padding)
+            x_cols = self.cached_x_cols
+            if x_cols is None:
+                x_cols = im2col(self.x.data, kernel_h, kernel_w, self.stride, self.padding)
             grad_weight = np.matmul(grad_output_reshaped, x_cols.T)
             grad_weight = grad_weight.reshape(self.weight.shape)
 
             # 4. Gradient wrt input (grad_input)
             # grad_cols = w_matrix.T @ grad_output_reshaped
-            w_matrix = self.weight.data.reshape(out_channels, -1)
+            w_matrix = self.cached_weight_matrix
+            if w_matrix is None:
+                w_matrix = self.weight.data.reshape(out_channels, -1)
             grad_cols = np.matmul(w_matrix.T, grad_output_reshaped)
             
             # 5. Transform columns back to image
@@ -375,6 +392,23 @@ class Conv2d(Layer):
 
         return output
 
+    def _convolve_im2col(self, x_data, batch_size, out_height, out_width):
+        """
+        Vectorized convolution by lowering sliding windows into matrix columns.
+        """
+        kernel_h, kernel_w = self.kernel_size
+        x_cols = im2col(x_data, kernel_h, kernel_w, self.stride, self.padding)
+        w_matrix = self.weight.data.reshape(self.out_channels, -1)
+        output_cols = np.matmul(w_matrix, x_cols)
+        output = output_cols.reshape(
+            self.out_channels, batch_size, out_height, out_width
+        ).transpose(1, 0, 2, 3)
+
+        if self.bias is not None:
+            output += self.bias.data.reshape(1, -1, 1, 1)
+
+        return output, x_cols, w_matrix
+
 
         
     def forward(self, x):
@@ -401,27 +435,13 @@ class Conv2d(Layer):
                 for out_ch in range(self.out_channels):
                     output[:, out_ch, :, :] += self.bias.data[out_ch]
 
-        else:  # im2col method
-            kernel_h, kernel_w = self.kernel_size
-            
-            # 1. Transform input into columns
-            # Shape: (C * Kh * Kw, B * Oh * Ow)
-            x_cols = im2col(x.data, kernel_h, kernel_w, self.stride, self.padding)
-            
-            # 2. Reshape weights into a matrix for matmul
-            # Shape: (Out_C, C * Kh * Kw)
-            w_matrix = self.weight.data.reshape(self.out_channels, -1)
-            
-            # 3. Compute output using matrix multiplication
-            # Shape: (Out_C, B * Oh * Ow)
-            output_cols = np.matmul(w_matrix, x_cols)
-            
-            # 4. Reshape back to image format (B, Out_C, Oh, Ow)
-            output = output_cols.reshape(self.out_channels, batch_size, out_height, out_width).transpose(1, 0, 2, 3)
+            x_cols = None
+            w_matrix = None
 
-            # 5. Add bias
-            if self.bias is not None:
-                output += self.bias.data.reshape(1, -1, 1, 1)
+        else:  # im2col method
+            output, x_cols, w_matrix = self._convolve_im2col(
+                x.data, batch_size, out_height, out_width
+            )
 
         # Returning Tensor with gradient tracking enabled
         result = Tensor(output, requires_grad=(x.requires_grad or self.weight.requires_grad))
@@ -431,7 +451,9 @@ class Conv2d(Layer):
             result._grad_fn = Conv2dBackward(
                 x, self.weight, self.bias,
                 self.stride, self.padding, self.kernel_size,
-                self.method
+                self.method,
+                cached_x_cols=x_cols,
+                cached_weight_matrix=w_matrix,
             )
         return result
 

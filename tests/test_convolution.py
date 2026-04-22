@@ -86,6 +86,33 @@ class TestConv2d:
         out = conv(x)
         assert out.shape == (2, 8, 6, 6)
 
+    def test_im2col_matches_naive_for_same_weights(self):
+        weight = np.arange(18, dtype=np.float32).reshape(2, 1, 3, 3)
+        bias = np.array([0.5, -1.0], dtype=np.float32)
+        x = Tensor(np.arange(25, dtype=np.float32).reshape(1, 1, 5, 5))
+
+        conv_naive = Conv2d(1, 2, kernel_size=3, padding=1, method="naive")
+        conv_im2col = Conv2d(1, 2, kernel_size=3, padding=1, method="im2col")
+
+        conv_naive.weight.data = weight.copy()
+        conv_im2col.weight.data = weight.copy()
+        conv_naive.bias.data = bias.copy()
+        conv_im2col.bias.data = bias.copy()
+
+        out_naive = conv_naive(x)
+        out_im2col = conv_im2col(x)
+
+        np.testing.assert_allclose(out_naive.data, out_im2col.data, rtol=1e-5, atol=1e-5)
+
+    def test_im2col_backward_caches_forward_projection(self):
+        conv = Conv2d(in_channels=1, out_channels=2, kernel_size=3, padding=1, method="im2col")
+        x = Tensor(np.random.randn(2, 1, 4, 4).astype(np.float32), requires_grad=True)
+
+        out = conv(x)
+
+        assert out._grad_fn.cached_x_cols is not None
+        assert out._grad_fn.cached_weight_matrix is not None
+
 
 class TestMaxPool2d:
     def test_output_shape(self):

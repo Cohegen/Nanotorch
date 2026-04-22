@@ -13,7 +13,22 @@ from attention.attention import (
     _scale_scores,
     _apply_mask,
     scaled_dot_product_attention,
+    flash_attention,
+    flash_attention_v2,
+    flash_attention_v3,
+    sparse_attention,
+    linear_attention,
+    paged_attention,
     MultiHeadAttention,
+    FlashMultiHeadAttention,
+    FlashMultiHeadAttentionV2,
+    FlashMultiHeadAttentionV3,
+    GroupedQueryAttention,
+    MultiQueryAttention,
+    MultiLatentAttention,
+    SparseMultiHeadAttention,
+    LinearMultiHeadAttention,
+    PagedMultiHeadAttention,
 )
 
 
@@ -76,6 +91,74 @@ class TestScaledDotProductAttention:
         out, weights = scaled_dot_product_attention(q, k, v, mask=mask)
         assert out.shape == (1, 4, 8)
 
+    def test_flash_attention_matches_standard(self):
+        q = Tensor(np.random.randn(1, 2, 5, 4).astype(np.float32))
+        k = Tensor(np.random.randn(1, 2, 5, 4).astype(np.float32))
+        v = Tensor(np.random.randn(1, 2, 5, 4).astype(np.float32))
+        mask = Tensor(np.tril(np.ones((5, 5), dtype=np.float32)))
+
+        standard_out, _ = scaled_dot_product_attention(q, k, v, mask=mask)
+        flash_out, flash_weights = flash_attention(q, k, v, mask=mask, block_size=2)
+
+        assert flash_weights is None
+        np.testing.assert_allclose(flash_out.data, standard_out.data, rtol=1e-4, atol=1e-4)
+
+    def test_flash_attention_v2_matches_standard(self):
+        q = Tensor(np.random.randn(1, 2, 6, 4).astype(np.float32))
+        k = Tensor(np.random.randn(1, 2, 6, 4).astype(np.float32))
+        v = Tensor(np.random.randn(1, 2, 6, 4).astype(np.float32))
+        mask = Tensor(np.tril(np.ones((6, 6), dtype=np.float32)))
+
+        standard_out, _ = scaled_dot_product_attention(q, k, v, mask=mask)
+        flash_out, _ = flash_attention_v2(q, k, v, mask=mask, query_block_size=2, key_block_size=3)
+
+        np.testing.assert_allclose(flash_out.data, standard_out.data, rtol=1e-4, atol=1e-4)
+
+    def test_flash_attention_v3_matches_standard(self):
+        q = Tensor(np.random.randn(1, 2, 6, 4).astype(np.float32))
+        k = Tensor(np.random.randn(1, 2, 6, 4).astype(np.float32))
+        v = Tensor(np.random.randn(1, 2, 6, 4).astype(np.float32))
+        mask = Tensor(np.tril(np.ones((6, 6), dtype=np.float32)))
+
+        standard_out, _ = scaled_dot_product_attention(q, k, v, mask=mask)
+        flash_out, _ = flash_attention_v3(q, k, v, mask=mask, query_block_size=2, page_size=3)
+
+        np.testing.assert_allclose(flash_out.data, standard_out.data, rtol=1e-4, atol=1e-4)
+
+    def test_sparse_attention_matches_standard_with_full_window(self):
+        q = Tensor(np.random.randn(1, 2, 5, 4).astype(np.float32))
+        k = Tensor(np.random.randn(1, 2, 5, 4).astype(np.float32))
+        v = Tensor(np.random.randn(1, 2, 5, 4).astype(np.float32))
+        mask = Tensor(np.tril(np.ones((5, 5), dtype=np.float32)))
+
+        standard_out, _ = scaled_dot_product_attention(q, k, v, mask=mask)
+        sparse_out, sparse_weights = sparse_attention(q, k, v, mask=mask, window_size=8)
+
+        assert sparse_weights.shape == (1, 2, 5, 5)
+        np.testing.assert_allclose(sparse_out.data, standard_out.data, rtol=1e-4, atol=1e-4)
+
+    def test_linear_attention_shape(self):
+        q = Tensor(np.random.randn(1, 2, 5, 4).astype(np.float32))
+        k = Tensor(np.random.randn(1, 2, 5, 4).astype(np.float32))
+        v = Tensor(np.random.randn(1, 2, 5, 4).astype(np.float32))
+
+        out, weights = linear_attention(q, k, v)
+
+        assert out.shape == (1, 2, 5, 4)
+        assert weights is None
+
+    def test_paged_attention_matches_standard(self):
+        q = Tensor(np.random.randn(1, 2, 6, 4).astype(np.float32))
+        k = Tensor(np.random.randn(1, 2, 6, 4).astype(np.float32))
+        v = Tensor(np.random.randn(1, 2, 6, 4).astype(np.float32))
+        mask = Tensor(np.tril(np.ones((6, 6), dtype=np.float32)))
+
+        standard_out, _ = scaled_dot_product_attention(q, k, v, mask=mask)
+        paged_out, paged_weights = paged_attention(q, k, v, mask=mask, page_size=3)
+
+        assert paged_weights is None
+        np.testing.assert_allclose(paged_out.data, standard_out.data, rtol=1e-4, atol=1e-4)
+
 
 class TestMultiHeadAttention:
     def test_output_shape(self):
@@ -102,3 +185,57 @@ class TestMultiHeadAttention:
         mask = Tensor(np.tril(np.ones((5, 5), dtype=np.float32)))
         out = mha(x, mask=mask)
         assert out.shape == (1, 5, 16)
+
+    def test_flash_multihead_attention_shape(self):
+        mha = FlashMultiHeadAttention(embed_dim=16, num_heads=4, block_size=2)
+        x = Tensor(np.random.randn(1, 5, 16).astype(np.float32))
+        out = mha(x)
+        assert out.shape == (1, 5, 16)
+
+    def test_flash_multihead_attention_v2_shape(self):
+        mha = FlashMultiHeadAttentionV2(embed_dim=16, num_heads=4, query_block_size=2, key_block_size=3)
+        x = Tensor(np.random.randn(1, 5, 16).astype(np.float32))
+        out = mha(x)
+        assert out.shape == (1, 5, 16)
+
+    def test_flash_multihead_attention_v3_shape(self):
+        mha = FlashMultiHeadAttentionV3(embed_dim=16, num_heads=4, query_block_size=2, page_size=3)
+        x = Tensor(np.random.randn(1, 5, 16).astype(np.float32))
+        out = mha(x)
+        assert out.shape == (1, 5, 16)
+
+    def test_grouped_query_attention_shape(self):
+        gqa = GroupedQueryAttention(embed_dim=16, num_heads=4, num_kv_heads=2)
+        x = Tensor(np.random.randn(2, 5, 16).astype(np.float32))
+        out = gqa(x)
+        assert out.shape == (2, 5, 16)
+
+    def test_multi_query_attention_shape(self):
+        mqa = MultiQueryAttention(embed_dim=16, num_heads=4)
+        x = Tensor(np.random.randn(2, 5, 16).astype(np.float32))
+        out = mqa(x)
+        assert out.shape == (2, 5, 16)
+
+    def test_multi_latent_attention_shape(self):
+        mla = MultiLatentAttention(embed_dim=16, num_heads=4, latent_dim=8, num_kv_heads=2)
+        x = Tensor(np.random.randn(2, 5, 16).astype(np.float32))
+        out = mla(x)
+        assert out.shape == (2, 5, 16)
+
+    def test_sparse_multihead_attention_shape(self):
+        mha = SparseMultiHeadAttention(embed_dim=16, num_heads=4, window_size=2, global_indices=[0])
+        x = Tensor(np.random.randn(2, 5, 16).astype(np.float32))
+        out = mha(x)
+        assert out.shape == (2, 5, 16)
+
+    def test_linear_multihead_attention_shape(self):
+        mha = LinearMultiHeadAttention(embed_dim=16, num_heads=4)
+        x = Tensor(np.random.randn(2, 5, 16).astype(np.float32))
+        out = mha(x)
+        assert out.shape == (2, 5, 16)
+
+    def test_paged_multihead_attention_shape(self):
+        mha = PagedMultiHeadAttention(embed_dim=16, num_heads=4, page_size=3)
+        x = Tensor(np.random.randn(2, 5, 16).astype(np.float32))
+        out = mha(x)
+        assert out.shape == (2, 5, 16)
