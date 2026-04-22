@@ -1,4 +1,11 @@
 """Neural-network compatibility exports."""
+import sys
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from activations.activations import ELU, GELU, LeakyReLU, Mish, PReLU, ReLU, SiLU, Sigmoid, Softmax, SwiGLU, Tanh
 from attention.attention import MultiHeadAttention, scaled_dot_product_attention
@@ -11,9 +18,9 @@ from embeddings.embeddings import (
 )
 from layers.layers import Dropout, Layer, Linear, Sequential
 from losses.losses import BinaryCrossEntropyLoss, CrossEntropyLoss, MSELoss, log_softmax
-from transformers.transformers import GPT, LayerNorm, MLP, TransformerBlock, create_causal_maks
+from transformers.transformers import GPT, LayerNorm, MLP, TransformerBlock, create_causal_mask
 
-from . import activations, attention, embeddings, functional, losses, modules, transformer
+import activations, attention, embeddings, functional, losses, modules, transformer
 
 Module = Layer
 

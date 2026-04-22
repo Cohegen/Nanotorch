@@ -58,6 +58,21 @@ Quantization engine system architecture
 - **Production patterns** - Industry-standard algorithms
 """
 
+def _tensor_from_array(array: np.ndarray) -> Tensor:
+    """
+    Build a Tensor without forcing the array back to float32.
+
+    The rest of NanoTorch is float-oriented, so this helper is only used inside
+    the quantization module when we need to preserve integer storage.
+    """
+    tensor = Tensor(np.zeros(array.shape, dtype=np.float32))
+    tensor.data = np.array(array, copy=True)
+    tensor.shape = tensor.data.shape
+    tensor.size_val = tensor.data.size
+    tensor.dtype = tensor.data.dtype
+    return tensor
+
+
 def quantize_int8(tensor:Tensor)->Tuple[Tensor,float,int]:
     """
     Quantizes FP32 tensor to INT8 using symmetric quantization.
@@ -89,7 +104,7 @@ def quantize_int8(tensor:Tensor)->Tuple[Tensor,float,int]:
         scale = 1.0
         zero_point = 0
         quantized_data = np.zeros_like(data,dtype=np.int8)
-        return Tensor(quantized_data),scale,zero_point
+        return _tensor_from_array(quantized_data),scale,zero_point
 
 
     #Calculating scale and zero_point for standard quantization
@@ -106,7 +121,7 @@ def quantize_int8(tensor:Tensor)->Tuple[Tensor,float,int]:
     #clamping to INT8 range and convert to int8
     quantized_data = np.clip(quantized_data,INT8_MIN_VALUE,INT8_MAX_VALUE).astype(np.int8)
 
-    return Tensor(quantized_data),scale,zero_point
+    return _tensor_from_array(quantized_data),scale,zero_point
 
 
 def dequantize_int8(q_tensor:Tensor,scale:float,zero_point:int) ->Tensor:
@@ -133,12 +148,57 @@ def dequantize_int8(q_tensor:Tensor,scale:float,zero_point:int) ->Tensor:
     return Tensor(dequantized_data)
 
 
+def quantize_int8_per_channel(tensor: Tensor, axis: int = 0) -> Tuple[Tensor, np.ndarray, np.ndarray]:
+    """
+    Quantize a tensor channel-wise along the given axis.
+
+    For Linear weights stored as (out_features, in_features), axis=0 means each
+    output channel gets its own scale and zero point.
+    """
+    data = tensor.data.astype(np.float32)
+    moved = np.moveaxis(data, axis, 0)
+    q_moved = np.zeros_like(moved, dtype=np.int8)
+    scales = np.zeros(moved.shape[0], dtype=np.float32)
+    zero_points = np.zeros(moved.shape[0], dtype=np.int32)
+
+    for channel_idx, channel_data in enumerate(moved):
+        q_channel, scale, zero_point = quantize_int8(Tensor(channel_data))
+        q_moved[channel_idx] = q_channel.data
+        scales[channel_idx] = scale
+        zero_points[channel_idx] = zero_point
+
+    quantized_data = np.moveaxis(q_moved, 0, axis)
+    return _tensor_from_array(quantized_data), scales, zero_points
+
+
+def dequantize_int8_per_channel(
+    q_tensor: Tensor,
+    scales: np.ndarray,
+    zero_points: np.ndarray,
+    axis: int = 0,
+) -> Tensor:
+    """
+    Dequantize a per-channel INT8 tensor back to float32.
+    """
+    q_data = np.moveaxis(q_tensor.data.astype(np.float32), axis, 0)
+    reshaped_scales = np.asarray(scales, dtype=np.float32).reshape((-1,) + (1,) * (q_data.ndim - 1))
+    reshaped_zero_points = np.asarray(zero_points, dtype=np.float32).reshape((-1,) + (1,) * (q_data.ndim - 1))
+    dequantized = (q_data - reshaped_zero_points) * reshaped_scales
+    dequantized = np.moveaxis(dequantized, 0, axis)
+    return Tensor(dequantized)
+
+
 class QuantizedLinear:
     """
     Quantized version of Linear layer using INT8 arithmetic
     """
 
-    def __init__(self,linear_layer:Linear):
+    def __init__(
+        self,
+        linear_layer:Linear,
+        weight_strategy: str = "per_tensor",
+        activation_strategy: Optional[str] = None,
+    ):
         """
         Creating quantized version of existing linear layer.
 
@@ -150,10 +210,31 @@ class QuantizedLinear:
         >>> print(quantized_layer.q_weight.data.dtype)
         int8
         """
+        valid_weight_strategies = {"per_tensor", "per_channel"}
+        valid_activation_strategies = {None, "dynamic"}
+        if weight_strategy not in valid_weight_strategies:
+            raise ValueError(
+                f"Unsupported weight strategy: {weight_strategy}. "
+                f"Expected one of {sorted(valid_weight_strategies)}"
+            )
+        if activation_strategy not in valid_activation_strategies:
+            raise ValueError(
+                f"Unsupported activation strategy: {activation_strategy}. "
+                f"Expected one of {[None, 'dynamic']}"
+            )
+
         self.original_layer = linear_layer
+        self.weight_strategy = weight_strategy
+        self.activation_strategy = activation_strategy
 
         #quantized weights
-        self.q_weight,self.weight_scale,self.weight_zero_point = quantize_int8(linear_layer.weight)
+        if weight_strategy == "per_channel":
+            self.q_weight, self.weight_scale, self.weight_zero_point = quantize_int8_per_channel(
+                linear_layer.weight,
+                axis=0,
+            )
+        else:
+            self.q_weight,self.weight_scale,self.weight_zero_point = quantize_int8(linear_layer.weight)
 
         #quantizing bias if it exists
         if linear_layer.bias is not None:
@@ -166,6 +247,8 @@ class QuantizedLinear:
         #store input quantization parameters (set during calibration)
         self.input_scale = None
         self.input_zero_point =None 
+        self.last_dynamic_input_scale = None
+        self.last_dynamic_input_zero_point = None
         # Note: do not overwrite bias quantization parameters here.
         # `self.bias_scale` / `self.bias_zero_point` are set above by quantize_int8().
 
@@ -215,13 +298,29 @@ class QuantizedLinear:
         (1, 3)
         """
 
+        #dynamically fake-quantize activations during inference if requested
+        x_for_matmul = x
+        if self.activation_strategy == "dynamic":
+            q_x, input_scale, input_zero_point = quantize_int8(x)
+            self.last_dynamic_input_scale = input_scale
+            self.last_dynamic_input_zero_point = input_zero_point
+            x_for_matmul = dequantize_int8(q_x, input_scale, input_zero_point)
+
         #dequantize weights and restore the original Linear layout
         # Linear.forward uses x @ weight.T because weights are stored as
         # (out_features, in_features).
-        weight_fp32 = dequantize_int8(self.q_weight,self.weight_scale,self.weight_zero_point)
+        if self.weight_strategy == "per_channel":
+            weight_fp32 = dequantize_int8_per_channel(
+                self.q_weight,
+                self.weight_scale,
+                self.weight_zero_point,
+                axis=0,
+            )
+        else:
+            weight_fp32 = dequantize_int8(self.q_weight,self.weight_scale,self.weight_zero_point)
 
         #perform computation 
-        result = x.matmul(weight_fp32.transpose(-2, -1))
+        result = x_for_matmul.matmul(weight_fp32.transpose(-2, -1))
 
         #add bias if it exists 
         if self.q_bias is not None:
@@ -264,8 +363,14 @@ class QuantizedLinear:
             quantized_bias_bytes = self.q_bias.data.size *BYTES_PER_INT8
 
         #add overhead for scales and zero points
-        #2 floats: one scale for weight, one scale for bias 
-        overhead_bytes = BYTES_PER_FLOAT32 * 2
+        #per-tensor: one scale + one zero_point
+        #per-channel: one scale + one zero_point per output channel
+        if self.weight_strategy == "per_channel":
+            weight_overhead_bytes = (self.weight_scale.size + self.weight_zero_point.size) * BYTES_PER_FLOAT32
+        else:
+            weight_overhead_bytes = BYTES_PER_FLOAT32 * 2
+        bias_overhead_bytes = BYTES_PER_FLOAT32 * 2 if self.q_bias is not None else 0
+        overhead_bytes = weight_overhead_bytes + bias_overhead_bytes
 
         quantized_total = quantized_weight_bytes + quantized_bias_bytes + overhead_bytes
         original_total = original_weight_bytes + original_bias_bytes
@@ -372,7 +477,12 @@ Single Layer Quantization:
 ```
 """
 
-def _quantize_single_layer(layer:Linear,calibration_inputs:Optional[List[Tensor]]=None):
+def _quantize_single_layer(
+    layer:Linear,
+    calibration_inputs:Optional[List[Tensor]]=None,
+    weight_strategy: str = "per_tensor",
+    activation_strategy: Optional[str] = None,
+):
     """
     Quantizing a single Linear layer and optionally calibrating it.
 
@@ -391,7 +501,11 @@ def _quantize_single_layer(layer:Linear,calibration_inputs:Optional[List[Tensor]
     int8
     """
 
-    quantized_layer = QuantizedLinear(layer)
+    quantized_layer = QuantizedLinear(
+        layer,
+        weight_strategy=weight_strategy,
+        activation_strategy=activation_strategy,
+    )
 
     if calibration_inputs is not None:
         quantized_layer.calibrate(calibration_inputs)
@@ -418,7 +532,12 @@ quantize_model() orchestrates the full pipeline:
 ```
 """
 
-def quantize_model(model,calibration_data:Optional[List[Tensor]]=None) -> None:
+def quantize_model(
+    model,
+    calibration_data:Optional[List[Tensor]]=None,
+    weight_strategy: str = "per_tensor",
+    activation_strategy: Optional[str] = None,
+) -> None:
     """
     Quantized all Liear layers in a model in-place
 
@@ -447,7 +566,12 @@ def quantize_model(model,calibration_data:Optional[List[Tensor]]=None) -> None:
                     cal_inputs = __collect_layer_inputs(model,i,calibration_data)
 
                 #replace with quantized version
-                model.layers[i]= _quantize_single_layer(layer,cal_inputs)
+                model.layers[i]= _quantize_single_layer(
+                    layer,
+                    cal_inputs,
+                    weight_strategy=weight_strategy,
+                    activation_strategy=activation_strategy,
+                )
 
     elif isinstance(model,Linear):
         raise ValueError(
@@ -619,7 +743,12 @@ class Quantizer:
         return dequantize_int8(q_tensor,scale,zero_point)
 
     @staticmethod 
-    def quantize_model(model,calibration_data:Optional[List[Tensor]]=None)->Dict[str,any]:
+    def quantize_model(
+        model,
+        calibration_data:Optional[List[Tensor]]=None,
+        weight_strategy: str = "per_tensor",
+        activation_strategy: Optional[str] = None,
+    )->Dict[str,any]:
         """
         Quantizes all linear layersin model and returns the stats
 
@@ -642,13 +771,18 @@ class Quantizer:
                 total_elements += param.data.size
 
                 #quantizing parameters using the individual function
-                q_param,scale,zp = quantize_int8(param)
+                if weight_strategy == "per_channel" and param.data.ndim >= 2:
+                    q_param,scale,zp = quantize_int8_per_channel(param, axis=0)
+                else:
+                    q_param,scale,zp = quantize_int8(param)
 
                 quantized_layers[f'param_{param_idx}'] = {
                     'quantized': q_param,
                     'scale': scale,
                     'zero_point': zp,
-                    'original_shape': param.data.shape
+                    'original_shape': param.data.shape,
+                    'weight_strategy': weight_strategy,
+                    'activation_strategy': activation_strategy,
                 }
                 param_idx += 1
 
