@@ -81,20 +81,17 @@ class TestTransformerBlock:
 
 
 class TestGPT:
-    @pytest.mark.skip(reason="GPT.__init__ has a missing 'Sequential' import in source")
     def test_output_shape(self):
         gpt = GPT(vocab_size=50, embed_dim=16, num_heads=4, num_layers=2, max_seq_len=32)
         x = Tensor(np.array([[0, 1, 2, 3]], dtype=np.float32))
         out = gpt(x)
         assert out.shape[-1] == 50  # vocab_size
 
-    @pytest.mark.skip(reason="GPT.__init__ has a missing 'Sequential' import in source")
     def test_parameters(self):
         gpt = GPT(vocab_size=50, embed_dim=16, num_heads=4, num_layers=2, max_seq_len=32)
         params = gpt.parameters()
         assert len(params) > 0
 
-    @pytest.mark.skip(reason="GPT.__init__ has a missing 'Sequential' import in source")
     def test_single_token(self):
         gpt = GPT(vocab_size=20, embed_dim=16, num_heads=4, num_layers=1, max_seq_len=10)
         x = Tensor(np.array([[5]], dtype=np.float32))

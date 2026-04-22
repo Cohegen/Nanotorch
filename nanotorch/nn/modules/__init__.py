@@ -1,7 +1,25 @@
 """PyTorch-style nn.modules namespace."""
 
 from activations.activations import ELU, GELU, LeakyReLU, Mish, PReLU, ReLU, SiLU, Sigmoid, Softmax, SwiGLU, Tanh
-from attention.attention import MultiHeadAttention, scaled_dot_product_attention
+from attention.attention import (
+    FlashMultiHeadAttention,
+    FlashMultiHeadAttentionV2,
+    FlashMultiHeadAttentionV3,
+    GroupedQueryAttention,
+    LinearMultiHeadAttention,
+    MultiHeadAttention,
+    MultiLatentAttention,
+    MultiQueryAttention,
+    PagedMultiHeadAttention,
+    SparseMultiHeadAttention,
+    flash_attention,
+    flash_attention_v2,
+    flash_attention_v3,
+    linear_attention,
+    paged_attention,
+    scaled_dot_product_attention,
+    sparse_attention,
+)
 from convolution.convolutions import AvgPool2d, BatchNorm2d, Conv2d, MaxPool2d
 from embeddings.embeddings import (
     Embedding,
@@ -11,7 +29,7 @@ from embeddings.embeddings import (
 )
 from layers.layers import Dropout, Layer, Linear, Sequential
 from losses.losses import BinaryCrossEntropyLoss, CrossEntropyLoss, MSELoss
-from transformers.transformers import GPT, LayerNorm, MLP, TransformerBlock, create_causal_maks
+from transformers.transformers import GPT, LayerNorm, MLP, TransformerBlock, create_causal_mask
 
 from . import (
     activation,
@@ -55,21 +73,36 @@ __all__ = [
     "Module",
     "MSELoss",
     "MultiHeadAttention",
+    "FlashMultiHeadAttention",
+    "FlashMultiHeadAttentionV2",
+    "FlashMultiHeadAttentionV3",
+    "GroupedQueryAttention",
+    "MultiQueryAttention",
+    "MultiLatentAttention",
+    "SparseMultiHeadAttention",
+    "LinearMultiHeadAttention",
+    "PagedMultiHeadAttention",
     "normalization",
     "PReLU",
     "PositionalEncoding",
     "pooling",
     "ReLU",
     "SiLU",
+    "flash_attention",
+    "flash_attention_v2",
+    "flash_attention_v3",
     "scaled_dot_product_attention",
     "Sequential",
     "Sigmoid",
     "Softmax",
+    "sparse_attention",
+    "linear_attention",
+    "paged_attention",
     "sparse",
     "SwiGLU",
     "Tanh",
     "transformer",
     "TransformerBlock",
-    "create_causal_maks",
+    "create_causal_mask",
     "create_sinusoidal_embeddings",
 ]
