@@ -116,6 +116,25 @@ class TestSequential:
         r = repr(model)
         assert "Sequential" in r
 
+    def test_forwards_optional_args_to_layers_that_accept_them(self):
+        class AddMask(Layer):
+            def forward(self, x, mask=None):
+                return x if mask is None else x + mask
+
+        model = Sequential(
+            AddMask(),
+            Linear(4, 4, bias=False),
+        )
+        x = Tensor(np.ones((1, 4), dtype=np.float32))
+        mask = Tensor(np.ones((1, 4), dtype=np.float32))
+
+        out = model(x, mask=mask)
+
+        expected = Tensor(np.full((1, 4), 2.0, dtype=np.float32)).matmul(
+            model.layers[1].weight.transpose(-2, -1)
+        )
+        np.testing.assert_allclose(out.data, expected.data)
+
 
 class TestLayer:
     def test_base_layer_parameters(self):

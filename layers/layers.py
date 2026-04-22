@@ -1,3 +1,4 @@
+import inspect
 import numpy as np
 import os
 import sys
@@ -290,25 +291,44 @@ class Sequential(Layer):
         """Sets all layers to evaluation mode."""
         return self.train(False)
 
-    def forward(self, x):
+    def forward(self, x, *args, **kwargs):
         """Forward pass through all layers sequentially."""
         for layer in self.layers:
-            # Check if layer expects training argument (old Dropout style) or uses self.training
+            sig = inspect.signature(layer.forward)
             if isinstance(layer, Dropout):
-                # Check if Dropout.forward still takes training=...
-                import inspect
-                sig = inspect.signature(layer.forward)
                 if 'training' in sig.parameters:
                     x = layer.forward(x, training=self.training)
+                else:
+                    x = layer.forward(x)
+            elif args or kwargs:
+                accepts_varargs = any(
+                    param.kind == inspect.Parameter.VAR_POSITIONAL
+                    for param in sig.parameters.values()
+                )
+                accepts_varkw = any(
+                    param.kind == inspect.Parameter.VAR_KEYWORD
+                    for param in sig.parameters.values()
+                )
+                positional_capacity = sum(
+                    1
+                    for index, param in enumerate(sig.parameters.values())
+                    if index > 0
+                    and param.kind in (
+                        inspect.Parameter.POSITIONAL_ONLY,
+                        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    )
+                )
+                if accepts_varargs or accepts_varkw or positional_capacity >= len(args):
+                    x = layer.forward(x, *args, **kwargs)
                 else:
                     x = layer.forward(x)
             else:
                 x = layer.forward(x)
         return x
 
-    def __call__(self,x):
+    def __call__(self, x, *args, **kwargs):
         """Allows the model to be called like a function. """
-        return self.forward(x)
+        return self.forward(x, *args, **kwargs)
 
     def parameters(self):
         """Collect all parameters from all layers."""
