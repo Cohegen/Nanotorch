@@ -73,7 +73,7 @@ Artifacts are written to `projects/Diffusion/artifacts/`:
 
 ### Visualization of the output.
 - After running the model, we get the following output below:
-![output examples](https://github.com/Cohegen/Nanotorch/edit/main/projects/Diffusion/artifacts/generated_sample.png)
+![output examples](https://github.com/Cohegen/Nanotorch/edit/main/projects/Diffusion/artifacts/generated_samples.png)
 
 ## Notes
 
