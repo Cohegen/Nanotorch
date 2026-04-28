@@ -71,6 +71,10 @@ Artifacts are written to `projects/Diffusion/artifacts/`:
 - `training_history.json`
 - `generated_samples.png`
 
+### Visualization of the output.
+- After running the model, we get the following output below:
+![output examples](https://github.com/Cohegen/Nanotorch/edit/main/projects/Diffusion/artifacts/generated_sample.png)
+
 ## Notes
 
 - The dataset is generated on the fly, so no external download is required.
