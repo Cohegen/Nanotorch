@@ -1,3 +1,5 @@
+
+
 # NanoTorch 1.3
 ![Output examples](azula.gif)
 
@@ -51,6 +53,8 @@ This repository intends to showcase the implementation of PyTorch, one of the mo
 - Builders who want to experiment with model ideas in a transparent, hackable codebase.
 
 ## Quick Start
+
+Requires Python 3.10 or newer.
 
 ```powershell
 git clone https://github.com/Cohegen/NanoTorch.git
